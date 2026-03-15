@@ -1,0 +1,70 @@
+name: fintrack
+description: FinTrack – Personal Finance Tracker App
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Firebase (configure later with: flutterfire configure)
+  firebase_core: ^3.9.0
+  firebase_auth: ^5.4.1
+  cloud_firestore: ^5.6.5
+  firebase_messaging: ^15.2.4
+  google_sign_in: ^6.2.2
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Navigation
+  go_router: ^14.6.3
+
+  # Charts
+  fl_chart: ^0.69.0
+
+  # Notifications
+  flutter_local_notifications: ^18.0.1
+
+  # Formatting
+  intl: 0.19.0
+
+  # Persistence
+  shared_preferences: ^2.3.3
+
+  # Animations
+  flutter_animate: ^4.5.0
+
+  # Images
+  cached_network_image: ^3.4.1
+
+  # Web platform interop
+  web: ^1.1.1
+  shimmer: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/F_icon_final.png"
+  min_sdk_android: 23
+  web:
+    generate: true
+    image_path: "assets/icons/F_icon_final.png"
+    background_color: "#0D0F14"
+    theme_color: "#6C63FF"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/
