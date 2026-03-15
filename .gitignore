@@ -46,3 +46,7 @@ app.*.map.json
 
 # Claude Code local settings
 .claude/
+
+# Signing
+android/key.properties
+android/app/fintrack-release.jks
