@@ -33,6 +33,21 @@ class _CurrencyInputFieldState extends State<CurrencyInputField> {
   }
 
   @override
+  void didUpdateWidget(CurrencyInputField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialValue != widget.initialValue &&
+        widget.initialValue != null) {
+      // Only overwrite if the current text doesn't already represent the new
+      // value — prevents clobbering in-progress user input (e.g. "5" → "5.00"
+      // while the user is still typing "500").
+      final currentParsed =
+          double.tryParse(_ctrl.text.replaceAll(',', '.'));
+      if (currentParsed == widget.initialValue) return;
+      _ctrl.text = widget.initialValue!.toStringAsFixed(2);
+    }
+  }
+
+  @override
   void dispose() {
     _ctrl.dispose();
     super.dispose();
@@ -54,6 +69,7 @@ class _CurrencyInputFieldState extends State<CurrencyInputField> {
         if (v == null || v.isEmpty) return 'Pflichtfeld';
         final parsed = double.tryParse(v.replaceAll(',', '.'));
         if (parsed == null) return 'Ungültiger Betrag';
+        if (parsed <= 0) return 'Betrag muss größer als 0 sein';
         return null;
       },
       onChanged: (v) {

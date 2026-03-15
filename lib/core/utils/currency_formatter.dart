@@ -37,4 +37,19 @@ class CurrencyFormatter {
     final prefix = percent >= 0 ? '+' : '';
     return '$prefix${percent.toStringAsFixed(2)} %';
   }
+
+  /// Smart crypto amount formatting — like Coinbase/Binance:
+  /// ≥1 → 4 decimals, ≥0.01 → 6 decimals, <0.01 → 8 decimals
+  static String formatCryptoAmount(double amount) {
+    if (amount >= 1) return _fmt(amount, 4);
+    if (amount >= 0.01) return _fmt(amount, 6);
+    return _fmt(amount, 8);
+  }
+
+  static String _fmt(double v, int decimals) {
+    final formatted = NumberFormat('#,##0.${'0' * decimals}', 'de_DE').format(v);
+    if (!formatted.contains(',')) return formatted;
+    final stripped = formatted.replaceAll(RegExp(r',?0+$'), '');
+    return stripped.isEmpty || stripped == '-' ? '0' : stripped;
+  }
 }

@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_router.dart';
@@ -11,7 +12,6 @@ import '../../../core/utils/date_formatter.dart';
 import '../../../shared/widgets/profile_image_stub.dart'
     if (dart.library.js_interop) '../../../shared/widgets/profile_image_web.dart';
 import '../../auth/providers/auth_providers.dart';
-import '../../giro/models/giro_account.dart';
 import '../../investments/screens/investments_screen.dart';
 import '../providers/home_providers.dart';
 
@@ -26,15 +26,32 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () async {
+          // Fetch live prices for crypto, ETF/stocks, and physical assets,
+          // then write updated values back to Firestore.
+          final cryptoList = ref.read(cryptoStreamProvider).valueOrNull ?? [];
+          final etfList = ref.read(etfStreamProvider).valueOrNull ?? [];
+          final assetsList = ref.read(assetsStreamProvider).valueOrNull ?? [];
+
+          final updated =
+              await ref.read(priceRefreshServiceProvider).refreshAll(
+                    cryptoList: cryptoList,
+                    etfList: etfList,
+                    assetsList: assetsList,
+                  );
+
+          // Invalidate the remaining providers so giro/festgeld/schulden
+          // and the chart history re-read fresh data too.
           ref.invalidate(giroStreamProvider);
           ref.invalidate(festgeldStreamProvider);
-          ref.invalidate(etfStreamProvider);
-          ref.invalidate(cryptoStreamProvider);
-          ref.invalidate(assetsStreamProvider);
           ref.invalidate(schuldenStreamProvider);
           ref.invalidate(netWorthHistoryProvider);
-          // Wait for at least one to refresh
-          await ref.read(giroStreamProvider.future).catchError((_) => <GiroAccount>[]);
+
+          if (context.mounted && updated > 0) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('$updated Kurse aktualisiert'),
+              duration: const Duration(seconds: 3),
+            ));
+          }
         },
         child: CustomScrollView(
           slivers: [
@@ -50,7 +67,8 @@ class HomeScreen extends ConsumerWidget {
                       'Hallo, ${user?.displayName.split(' ').first ?? 'Nutzer'} 👋',
                       style: theme.textTheme.titleMedium,
                     ),
-                    Text('Gesamtvermögen', style: theme.textTheme.bodyMedium),
+                    Text('Schön dass du da bist!',
+                        style: theme.textTheme.bodyMedium),
                   ],
                 ),
               ),
@@ -71,7 +89,9 @@ class HomeScreen extends ConsumerWidget {
                         .animate()
                         .fadeIn(duration: 400.ms)
                         .slideY(begin: 0.1, end: 0, duration: 400.ms),
-                    const SizedBox(height: 16),
+                    const _WelcomeBanner()
+                        .animate()
+                        .fadeIn(delay: 80.ms, duration: 300.ms),
                     const _UpcomingMaturityBanner()
                         .animate()
                         .fadeIn(delay: 100.ms, duration: 300.ms),
@@ -79,17 +99,18 @@ class HomeScreen extends ConsumerWidget {
                     Text('Kategorien', style: theme.textTheme.titleLarge)
                         .animate()
                         .fadeIn(delay: 150.ms, duration: 300.ms),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 10),
                     const _CategoryCards(),
                     const SizedBox(height: 24),
-                    Text('Vermögensentwicklung', style: theme.textTheme.titleLarge)
+                    Text('Vermögensentwicklung',
+                            style: theme.textTheme.titleLarge)
                         .animate()
                         .fadeIn(delay: 400.ms, duration: 300.ms),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     const _MiniChart()
                         .animate()
                         .fadeIn(delay: 450.ms, duration: 300.ms),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -154,14 +175,18 @@ class _NetWorthHero extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: (isPositive ? AppColors.darkPositive : AppColors.darkSecondary)
+                  color: (isPositive
+                          ? AppColors.darkPositive
+                          : AppColors.darkSecondary)
                       .withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   '${CurrencyFormatter.formatPnl(change.absolute)}  ${CurrencyFormatter.formatPercent(change.percent)}',
                   style: TextStyle(
-                    color: isPositive ? AppColors.darkPositive : AppColors.darkSecondary,
+                    color: isPositive
+                        ? AppColors.darkPositive
+                        : AppColors.darkSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -170,7 +195,8 @@ class _NetWorthHero extends ConsumerWidget {
               const SizedBox(width: 8),
               const Text(
                 'seit gestern',
-                style: TextStyle(color: AppColors.darkTextSecondary, fontSize: 12),
+                style:
+                    TextStyle(color: AppColors.darkTextSecondary, fontSize: 12),
               ),
             ],
           ),
@@ -197,22 +223,59 @@ class _CategoryCards extends ConsumerWidget {
     // (label, gradient, icon, amount, route, investmentsTab)
     // investmentsTab = -1 means not an investments sub-tab
     final categories = [
-      ('Giro Konto', AppColors.gradientGiro, Icons.account_balance_outlined, giro,
-          AppRoutes.accounts, -1),
-      ('Festgeld', AppColors.gradientFestgeld, Icons.lock_clock_outlined, festgeld,
-          AppRoutes.investments, 0),
-      ('ETF & Aktien', AppColors.gradientEtf, Icons.trending_up_outlined, etf,
-          AppRoutes.investments, 1),
-      ('Krypto', AppColors.gradientCrypto, Icons.currency_bitcoin_outlined, crypto,
-          AppRoutes.investments, 2),
-      ('Physische Assets', AppColors.gradientPhysical, Icons.inventory_2_outlined, assets,
-          AppRoutes.investments, 3),
-      ('Schulden', AppColors.gradientSchulden, Icons.balance_outlined, schulden,
-          AppRoutes.debts, -1),
+      (
+        'Giro Konto',
+        AppColors.gradientGiro,
+        FontAwesomeIcons.buildingColumns,
+        giro,
+        AppRoutes.accounts,
+        -1
+      ),
+      (
+        'Festgeld',
+        AppColors.gradientFestgeld,
+        FontAwesomeIcons.piggyBank,
+        festgeld,
+        AppRoutes.investments,
+        0
+      ),
+      (
+        'ETF & Aktien',
+        AppColors.gradientEtf,
+        FontAwesomeIcons.chartLine,
+        etf,
+        AppRoutes.investments,
+        1
+      ),
+      (
+        'Krypto',
+        AppColors.gradientCrypto,
+        FontAwesomeIcons.coins,
+        crypto,
+        AppRoutes.investments,
+        2
+      ),
+      (
+        'Physische Assets',
+        AppColors.gradientPhysical,
+        FontAwesomeIcons.gem,
+        assets,
+        AppRoutes.investments,
+        3
+      ),
+      (
+        'Schulden',
+        AppColors.gradientSchulden,
+        FontAwesomeIcons.creditCard,
+        schulden,
+        AppRoutes.debts,
+        -1
+      ),
     ];
 
     return GridView.builder(
       shrinkWrap: true,
+      padding: EdgeInsets.zero,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
@@ -222,7 +285,8 @@ class _CategoryCards extends ConsumerWidget {
       ),
       itemCount: categories.length,
       itemBuilder: (context, i) {
-        final (label, gradient, icon, amount, route, investmentsTab) = categories[i];
+        final (label, gradient, icon, amount, route, investmentsTab) =
+            categories[i];
         return GestureDetector(
           onTap: () {
             if (investmentsTab >= 0) {
@@ -230,7 +294,6 @@ class _CategoryCards extends ConsumerWidget {
             }
             context.go(route);
           },
-
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -251,7 +314,7 @@ class _CategoryCards extends ConsumerWidget {
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 18),
+                  child: FaIcon(icon, color: Colors.white, size: 18),
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,10 +342,155 @@ class _CategoryCards extends ConsumerWidget {
           ),
         )
             .animate()
-            .fadeIn(delay: Duration(milliseconds: 200 + i * 60), duration: 300.ms)
-            .slideY(begin: 0.15, end: 0,
-                delay: Duration(milliseconds: 200 + i * 60), duration: 300.ms);
+            .fadeIn(
+                delay: Duration(milliseconds: 200 + i * 60), duration: 300.ms)
+            .slideY(
+                begin: 0.15,
+                end: 0,
+                delay: Duration(milliseconds: 200 + i * 60),
+                duration: 300.ms);
       },
+    );
+  }
+}
+
+// ── Welcome / Onboarding Banner ───────────────────────────────────────────────
+
+class _WelcomeBanner extends ConsumerWidget {
+  const _WelcomeBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Show only when all streams are loaded and everything is still empty
+    final allLoaded = ref.watch(giroStreamProvider).hasValue &&
+        ref.watch(festgeldStreamProvider).hasValue &&
+        ref.watch(etfStreamProvider).hasValue &&
+        ref.watch(cryptoStreamProvider).hasValue &&
+        ref.watch(assetsStreamProvider).hasValue &&
+        ref.watch(schuldenStreamProvider).hasValue;
+
+    if (!allLoaded) return const SizedBox.shrink();
+
+    final netWorth = ref.watch(netWorthProvider);
+    if (netWorth != 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF1E2530), Color(0xFF161B22)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border:
+              Border.all(color: AppColors.darkPrimary.withValues(alpha: 0.4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkPrimary.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.waving_hand_outlined,
+                      color: AppColors.darkPrimary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Willkommen bei FinTrack!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Füge deine ersten Positionen hinzu, um dein Gesamtvermögen zu tracken.',
+              style: TextStyle(
+                color: AppColors.darkTextSecondary,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _OnboardingButton(
+                    label: 'Konto hinzufügen',
+                    icon: Icons.account_balance_outlined,
+                    onTap: () => context.go(AppRoutes.accounts),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _OnboardingButton(
+                    label: 'Investment hinzufügen',
+                    icon: Icons.trending_up_outlined,
+                    onTap: () => context.go(AppRoutes.investments),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OnboardingButton extends StatelessWidget {
+  const _OnboardingButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: AppColors.darkPrimary.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+          border:
+              Border.all(color: AppColors.darkPrimary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: AppColors.darkPrimary),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.darkPrimary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -298,7 +506,9 @@ class _UpcomingMaturityBanner extends ConsumerWidget {
     if (upcoming.isEmpty) return const SizedBox.shrink();
 
     final next = upcoming.first;
-    return Container(
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.darkWarning.withValues(alpha: 0.15),
@@ -312,7 +522,7 @@ class _UpcomingMaturityBanner extends ConsumerWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              '⏰ ${next.bankName} – ${DateFormatter.daysRemaining(next.endDate)} (${CurrencyFormatter.format(next.amount)})',
+              '${next.bankName} – ${DateFormatter.daysRemaining(next.endDate)} (${CurrencyFormatter.format(next.amount)})',
               style: const TextStyle(
                   color: AppColors.darkWarning,
                   fontSize: 13,
@@ -321,6 +531,7 @@ class _UpcomingMaturityBanner extends ConsumerWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -397,8 +608,7 @@ class _MiniChart extends ConsumerWidget {
                                 .asMap()
                                 .entries
                                 .map((e) => FlSpot(
-                                    e.key.toDouble(),
-                                    e.value.totalNetWorth))
+                                    e.key.toDouble(), e.value.totalNetWorth))
                                 .toList(),
                             isCurved: true,
                             color: AppColors.darkPrimary,

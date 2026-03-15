@@ -51,6 +51,8 @@ class _InvestmentsScreenState extends ConsumerState<InvestmentsScreen>
         title: const Text('Investments'),
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: const [
             Tab(text: 'Festgeld'),
             Tab(text: 'ETF & Aktien'),

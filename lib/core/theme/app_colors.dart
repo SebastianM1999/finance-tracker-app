@@ -28,10 +28,10 @@ class AppColors {
   static const lightBorder = Color(0xFFDDE1EB);
 
   // --- Category Gradients ---
-  static const gradientGiro = [Color(0xFF667EEA), Color(0xFF764BA2)];
-  static const gradientFestgeld = [Color(0xFFF093FB), Color(0xFFF5576C)];
-  static const gradientEtf = [Color(0xFF4FACFE), Color(0xFF00F2FE)];
-  static const gradientCrypto = [Color(0xFFFA709A), Color(0xFFFEE140)];
-  static const gradientPhysical = [Color(0xFF43E97B), Color(0xFF38F9D7)];
-  static const gradientSchulden = [Color(0xFFFF6B6B), Color(0xFFEE0979)];
+  static const gradientGiro = [Color(0xFF5265BB), Color(0xFF5E3C82)];
+  static const gradientFestgeld = [Color(0xFFC076C9), Color(0xFFC44656)];
+  static const gradientEtf = [Color(0xFF3F8ACB), Color(0xFF00C2CB)];
+  static const gradientCrypto = [Color(0xFFC85A7B), Color(0xFFCBB433)];
+  static const gradientPhysical = [Color(0xFF36BA62), Color(0xFF2DC7AC)];
+  static const gradientSchulden = [Color(0xFFCC5656), Color(0xFFBE0761)];
 }

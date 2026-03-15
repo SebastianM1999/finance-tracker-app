@@ -32,7 +32,7 @@ class CryptoPosition {
     final d = doc.data() as Map<String, dynamic>;
     return CryptoPosition(
       id: doc.id,
-      exchange: d['exchange'] as String,
+      exchange: (d['exchange'] as String?) ?? '',
       coinName: d['coinName'] as String,
       coinSymbol: d['coinSymbol'] as String,
       amount: (d['amount'] as num).toDouble(),

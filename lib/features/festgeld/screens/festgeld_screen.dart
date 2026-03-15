@@ -43,7 +43,7 @@ class FestgeldTabBody extends ConsumerWidget {
             ? const _EmptyState()
             : Column(
                 children: [
-                  _TotalBanner(total: total),
+                  _TotalBanner(total: total, list: list),
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: () async =>
@@ -82,11 +82,17 @@ class FestgeldTabBody extends ConsumerWidget {
 // ── Total Banner ──────────────────────────────────────────────────────────────
 
 class _TotalBanner extends StatelessWidget {
-  const _TotalBanner({required this.total});
+  const _TotalBanner({required this.total, required this.list});
   final double total;
+  final List<Festgeld> list;
 
   @override
   Widget build(BuildContext context) {
+    final totalInterest = list.fold(
+      0.0,
+      (s, f) => s + (f.projectedPayout - f.amount),
+    );
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -101,15 +107,35 @@ class _TotalBanner extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text('Gesamt angelegt',
-              style: TextStyle(color: Colors.white, fontSize: 14)),
-          Text(
-            CurrencyFormatter.format(total),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Gesamt angelegt',
+                  style: TextStyle(color: Colors.white70, fontSize: 12)),
+              Text(
+                CurrencyFormatter.format(total),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text('Zinsertrag',
+                  style: TextStyle(color: Colors.white70, fontSize: 12)),
+              Text(
+                '+${CurrencyFormatter.format(totalInterest)}',
+                style: const TextStyle(
+                  color: Color(0xFFB8F5D8),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -122,6 +148,13 @@ class _TotalBanner extends StatelessWidget {
 class _FestgeldCard extends ConsumerWidget {
   const _FestgeldCard({required this.item});
   final Festgeld item;
+
+  Color _barColor(double progress, bool isExpired) {
+    if (isExpired) return AppColors.darkSecondary;
+    if (progress >= 0.90) return const Color(0xFF4FC770);
+    if (progress >= 0.75) return AppColors.darkPositive;
+    return AppColors.darkPrimary;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -212,7 +245,14 @@ class _FestgeldCard extends ConsumerWidget {
                   ],
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
+
+                // Urgency badge
+                if (item.progress >= 0.75 || isExpired)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _UrgencyBadge(daysLeft: daysLeft, isExpired: isExpired, progress: item.progress),
+                  ),
 
                 // Progress bar
                 ClipRRect(
@@ -223,7 +263,7 @@ class _FestgeldCard extends ConsumerWidget {
                     backgroundColor: theme.colorScheme.outlineVariant
                         .withValues(alpha: 0.3),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      isExpired ? AppColors.darkSecondary : const Color(0xFFF5576C),
+                      _barColor(item.progress, isExpired),
                     ),
                   ),
                 ),
@@ -244,8 +284,8 @@ class _FestgeldCard extends ConsumerWidget {
                         color: isExpired
                             ? AppColors.darkSecondary
                             : daysLeft <= 30
-                                ? AppColors.darkWarning
-                                : AppColors.darkPositive,
+                                ? AppColors.darkPositive
+                                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -255,6 +295,60 @@ class _FestgeldCard extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Urgency Badge ─────────────────────────────────────────────────────────────
+
+class _UrgencyBadge extends StatelessWidget {
+  const _UrgencyBadge({required this.daysLeft, required this.isExpired, required this.progress});
+  final int daysLeft;
+  final bool isExpired;
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bg;
+    final IconData icon;
+    final String label;
+
+    if (isExpired) {
+      bg = AppColors.darkSecondary;
+      icon = Icons.lock_clock_outlined;
+      label = 'Abgelaufen';
+    } else if (progress >= 0.90) {
+      bg = AppColors.darkPositive;
+      icon = Icons.celebration_outlined;
+      label = daysLeft == 0 ? 'Heute fällig!' : 'Fällig in $daysLeft ${daysLeft == 1 ? 'Tag' : 'Tagen'}';
+    } else {
+      bg = const Color(0xFF4FC770);
+      icon = Icons.schedule_outlined;
+      label = 'Fällig in $daysLeft Tagen';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: bg.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: bg.withValues(alpha: 0.4), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: bg),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: bg,
+            ),
+          ),
+        ],
       ),
     );
   }

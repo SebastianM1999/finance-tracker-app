@@ -313,6 +313,52 @@ class _SchuldCard extends ConsumerWidget {
   }
 }
 
+// ── Type Toggle Button ────────────────────────────────────────────────────────
+
+class _TypeButton extends StatelessWidget {
+  const _TypeButton({
+    required this.label,
+    required this.selected,
+    required this.selectedColor,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final Color selectedColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? selectedColor : selectedColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? selectedColor : selectedColor.withValues(alpha: 0.3),
+              width: 1.5,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected ? Colors.white : selectedColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Empty State ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
@@ -467,20 +513,22 @@ class _SchuldSheetState extends ConsumerState<_SchuldSheet> {
               const SizedBox(height: 16),
 
               // Type toggle
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(
-                      value: 'I_OWE',
-                      label: Text('Ich schulde'),
-                      icon: Icon(Icons.arrow_upward, size: 16)),
-                  ButtonSegment(
-                      value: 'OWED_TO_ME',
-                      label: Text('Mir geschuldet'),
-                      icon: Icon(Icons.arrow_downward, size: 16)),
+              Row(
+                children: [
+                  _TypeButton(
+                    label: 'Ich schulde',
+                    selected: _type == 'I_OWE',
+                    selectedColor: AppColors.darkSecondary,
+                    onTap: () => setState(() => _type = 'I_OWE'),
+                  ),
+                  const SizedBox(width: 8),
+                  _TypeButton(
+                    label: 'Mir geschuldet',
+                    selected: _type == 'OWED_TO_ME',
+                    selectedColor: AppColors.darkPositive,
+                    onTap: () => setState(() => _type = 'OWED_TO_ME'),
+                  ),
                 ],
-                selected: {_type},
-                onSelectionChanged: (s) =>
-                    setState(() => _type = s.first),
               ),
               const SizedBox(height: 16),
 

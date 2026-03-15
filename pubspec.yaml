@@ -30,6 +30,7 @@ dependencies:
 
   # Notifications
   flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
 
   # Formatting
   intl: 0.19.0
@@ -43,9 +44,18 @@ dependencies:
   # Images
   cached_network_image: ^3.4.1
 
+  # Icons
+  font_awesome_flutter: ^10.8.0
+
   # Web platform interop
   web: ^1.1.1
   shimmer: ^3.0.0
+
+  # HTTP client
+  http: ^1.2.2
+
+  # Open system settings pages
+  app_settings: ^5.1.1
 
 dev_dependencies:
   flutter_test:

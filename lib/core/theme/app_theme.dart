@@ -52,6 +52,9 @@ class AppTheme {
           elevation: 0,
           centerTitle: false,
         ),
+        tabBarTheme: const TabBarThemeData(
+          dividerColor: AppColors.darkBorder,
+        ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: AppColors.darkPrimary,
           foregroundColor: Colors.white,
@@ -63,6 +66,12 @@ class AppTheme {
           backgroundColor: AppColors.darkSurfaceVariant,
           contentTextStyle: TextStyle(color: AppColors.darkText),
           behavior: SnackBarBehavior.floating,
+        ),
+        segmentedButtonTheme: SegmentedButtonThemeData(
+          style: SegmentedButton.styleFrom(
+            selectedBackgroundColor: AppColors.darkPrimary,
+            selectedForegroundColor: Colors.white,
+          ),
         ),
       );
 
@@ -112,6 +121,9 @@ class AppTheme {
           foregroundColor: AppColors.lightText,
           elevation: 0,
           centerTitle: false,
+        ),
+        tabBarTheme: const TabBarThemeData(
+          dividerColor: AppColors.lightBorder,
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: AppColors.lightPrimary,

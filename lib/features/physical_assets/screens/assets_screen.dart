@@ -1,20 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../shared/services/price_service.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/currency_input_field.dart';
 import '../../../shared/widgets/shimmer_loading.dart';
 import '../../home/providers/home_providers.dart';
 import '../models/physical_asset.dart';
 
-class AssetsTabBody extends ConsumerWidget {
+class AssetsTabBody extends ConsumerStatefulWidget {
   const AssetsTabBody({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AssetsTabBody> createState() => _AssetsTabBodyState();
+}
+
+class _AssetsTabBodyState extends ConsumerState<AssetsTabBody> {
+  bool _refreshing = false;
+
+  static const _commodityTickers = {
+    'Gold': 'GC=F',
+    'Silber': 'SI=F',
+    'Platin': 'PL=F',
+  };
+
+  Future<void> _refreshAll(List<PhysicalAsset> list) async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    final repo = ref.read(assetsRepositoryProvider);
+    int updated = 0;
+    for (final asset in list) {
+      final ticker = _commodityTickers[asset.assetType];
+      if (ticker == null) continue;
+      final result = await PriceService.fetchCommodityPrice(ticker);
+      if (result == null) continue;
+      // quantity is stored in troy oz, result.price is per troy oz
+      final double newValue = result.price * asset.quantity;
+      await repo.update(PhysicalAsset(
+        id: asset.id,
+        assetType: asset.assetType,
+        description: asset.description,
+        quantity: asset.quantity,
+        weightPerUnit: asset.weightPerUnit,
+        buyPrice: asset.buyPrice,
+        currentValue: newValue,
+        notes: asset.notes,
+        createdAt: asset.createdAt,
+      ));
+      updated++;
+    }
+    if (!mounted) return;
+    setState(() => _refreshing = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$updated Asset(s) aktualisiert')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final stream = ref.watch(assetsStreamProvider);
     final total = ref.watch(assetsTotalProvider);
 
@@ -27,13 +74,16 @@ class AssetsTabBody extends ConsumerWidget {
             ? const _EmptyState()
             : Column(
                 children: [
-                  _TotalBanner(total: total, list: list),
+                  _TotalBanner(
+                    total: total,
+                    list: list,
+                  ),
+                  const _PullHint(),
                   Expanded(
                     child: RefreshIndicator(
-                      onRefresh: () async =>
-                          ref.invalidate(assetsStreamProvider),
+                      onRefresh: () => _refreshAll(list),
                       child: ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
                         itemCount: list.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: 12),
@@ -45,15 +95,14 @@ class AssetsTabBody extends ConsumerWidget {
               ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showSheet(context, ref),
+        onPressed: () => _showSheet(context),
         icon: const Icon(Icons.add),
         label: const Text('Asset hinzufügen'),
       ),
     );
   }
 
-  void _showSheet(BuildContext context, WidgetRef ref,
-      [PhysicalAsset? asset]) {
+  void _showSheet(BuildContext context, [PhysicalAsset? asset]) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -63,10 +112,41 @@ class AssetsTabBody extends ConsumerWidget {
   }
 }
 
+// ── Pull Hint ─────────────────────────────────────────────────────────────────
+
+class _PullHint extends StatelessWidget {
+  const _PullHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.keyboard_arrow_down,
+              size: 13, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45)),
+          const SizedBox(width: 3),
+          Text(
+            'Zum Aktualisieren runterziehen',
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Total Banner ──────────────────────────────────────────────────────────────
 
 class _TotalBanner extends StatelessWidget {
-  const _TotalBanner({required this.total, required this.list});
+  const _TotalBanner({
+    required this.total,
+    required this.list,
+  });
   final double total;
   final List<PhysicalAsset> list;
 
@@ -133,19 +213,20 @@ class _AssetCard extends ConsumerWidget {
   const _AssetCard({required this.asset});
   final PhysicalAsset asset;
 
-  static const _icons = {
-    'Gold': '🥇',
-    'Silber': '🥈',
-    'Immobilie': '🏠',
-    'Auto': '🚗',
-    'Sonstiges': '💎',
+  static const _faIcons = {
+    'Gold': FontAwesomeIcons.coins,
+    'Silber': FontAwesomeIcons.coins,
+    'Platin': FontAwesomeIcons.gem,
+    'Immobilie': FontAwesomeIcons.houseChimney,
+    'Auto': FontAwesomeIcons.car,
+    'Öl': FontAwesomeIcons.oilCan,
+    'Sonstiges': FontAwesomeIcons.gem,
   };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final pnlPos = asset.pnlAbsolute >= 0;
-    final icon = _icons[asset.assetType] ?? '💎';
 
     return Dismissible(
       key: Key(asset.id),
@@ -190,8 +271,11 @@ class _AssetCard extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
-                    child: Text(icon,
-                        style: const TextStyle(fontSize: 20)),
+                    child: FaIcon(
+                      _faIcons[asset.assetType] ?? FontAwesomeIcons.gem,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -301,8 +385,7 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _description;
-  late final TextEditingController _quantity;
-  late final TextEditingController _weight;
+  late final TextEditingController _ozQty; // troy oz (metals, oz mode)
   late final TextEditingController _notes;
 
   double _buyPrice = 0;
@@ -310,32 +393,56 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
   String _assetType = 'Gold';
   bool _saving = false;
 
-  static const _types = ['Gold', 'Silber', 'Immobilie', 'Auto', 'Sonstiges'];
+  // EUR mode (metals)
+  bool _useEurMode = true;
+  double _eurAmount = 0;
+  double _spotPrice = 0;
+  bool _fetchingPrice = false;
+
+  static const _types = ['Gold', 'Silber', 'Platin', 'Immobilie', 'Auto', 'Sonstiges'];
+  static const _metalTickers = {'Gold': 'GC=F', 'Silber': 'SI=F', 'Platin': 'PL=F'};
 
   bool get _isEdit => widget.asset != null;
+  bool get _isMetal => _metalTickers.containsKey(_assetType);
 
   @override
   void initState() {
     super.initState();
     final a = widget.asset;
     _description = TextEditingController(text: a?.description ?? '');
-    _quantity = TextEditingController(
-        text: a != null ? a.quantity.toString() : '1');
-    _weight = TextEditingController(
-        text: a?.weightPerUnit?.toString() ?? '');
+    // For edit mode show existing oz quantity
+    _ozQty = TextEditingController(
+        text: a != null ? a.quantity.toStringAsFixed(4) : '');
     _notes = TextEditingController(text: a?.notes ?? '');
     _buyPrice = a?.buyPrice ?? 0;
     _currentValue = a?.currentValue ?? 0;
     _assetType = a?.assetType ?? 'Gold';
+    // Edit mode: default to oz mode so the user sees stored values
+    _useEurMode = !_isEdit;
+
+    if (_isMetal) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _fetchSpotPrice());
+    }
   }
 
   @override
   void dispose() {
     _description.dispose();
-    _quantity.dispose();
-    _weight.dispose();
+    _ozQty.dispose();
     _notes.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchSpotPrice() async {
+    final ticker = _metalTickers[_assetType];
+    if (ticker == null) return;
+    setState(() => _fetchingPrice = true);
+    final result = await PriceService.fetchCommodityPrice(ticker);
+    if (!mounted) return;
+    setState(() {
+      _fetchingPrice = false;
+      if (result != null) _spotPrice = result.price;
+    });
   }
 
   Future<void> _save() async {
@@ -343,18 +450,37 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
     setState(() => _saving = true);
     try {
       final repo = ref.read(assetsRepositoryProvider);
-      final qty =
-          double.tryParse(_quantity.text.trim().replaceAll(',', '.')) ?? 1;
-      final weight = double.tryParse(_weight.text.trim().replaceAll(',', '.'));
       final now = DateTime.now();
+
+      double qty;
+      double buyPriceTotal;
+      double currentVal;
+
+      if (_isMetal) {
+        if (_useEurMode) {
+          final price = _spotPrice > 0 ? _spotPrice : 1.0;
+          qty = _eurAmount / price;
+          buyPriceTotal = _eurAmount;
+          currentVal = _eurAmount;
+        } else {
+          qty = double.tryParse(_ozQty.text.trim().replaceAll(',', '.')) ?? 1.0;
+          buyPriceTotal = _buyPrice;
+          currentVal = _spotPrice > 0 ? _spotPrice * qty : _currentValue;
+        }
+      } else {
+        qty = 1.0;
+        buyPriceTotal = _buyPrice;
+        currentVal = _currentValue > 0 ? _currentValue : _buyPrice;
+      }
+
       final a = PhysicalAsset(
         id: widget.asset?.id ?? '',
         assetType: _assetType,
         description: _description.text.trim(),
         quantity: qty,
-        weightPerUnit: weight,
-        buyPrice: _buyPrice,
-        currentValue: _currentValue > 0 ? _currentValue : _buyPrice,
+        weightPerUnit: null,
+        buyPrice: buyPriceTotal,
+        currentValue: currentVal > 0 ? currentVal : buyPriceTotal,
         notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
         createdAt: widget.asset?.createdAt ?? now,
       );
@@ -377,7 +503,6 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final showWeight = _assetType == 'Gold' || _assetType == 'Silber';
 
     return Container(
       decoration: BoxDecoration(
@@ -413,83 +538,128 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
               // Type dropdown
               DropdownButtonFormField<String>(
                 value: _assetType,
-                decoration:
-                    const InputDecoration(labelText: 'Typ'),
+                decoration: const InputDecoration(labelText: 'Typ'),
                 items: _types
                     .map((t) => DropdownMenuItem(value: t, child: Text(t)))
                     .toList(),
-                onChanged: (v) =>
-                    setState(() => _assetType = v ?? _assetType),
+                onChanged: (v) {
+                  setState(() {
+                    _assetType = v ?? _assetType;
+                    _spotPrice = 0;
+                    _useEurMode = !_isEdit;
+                  });
+                  if (_isMetal) _fetchSpotPrice();
+                },
               ),
               const SizedBox(height: 12),
 
               TextFormField(
                 controller: _description,
                 decoration: const InputDecoration(
-                    labelText: 'Bezeichnung (z.B. 1 Unze Krugerrand)'),
+                    labelText: 'Bezeichnung (z.B. Krugerrand)'),
                 validator: (v) =>
                     v?.trim().isEmpty == true ? 'Pflichtfeld' : null,
               ),
               const SizedBox(height: 12),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _quantity,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      decoration:
-                          const InputDecoration(labelText: 'Menge'),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Pflichtfeld';
-                        }
-                        return null;
-                      },
-                    ),
+              // ── Metal inputs ───────────────────────────────────────────────
+              if (_isMetal) ...[
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: true, label: Text('€ Betrag')),
+                    ButtonSegment(value: false, label: Text('Unzen (oz)')),
+                  ],
+                  selected: {_useEurMode},
+                  onSelectionChanged: (s) =>
+                      setState(() => _useEurMode = s.first),
+                ),
+                const SizedBox(height: 12),
+
+                if (_useEurMode) ...[
+                  CurrencyInputField(
+                    label: 'Investierter Betrag',
+                    initialValue: _eurAmount > 0 ? _eurAmount : null,
+                    onChanged: (v) => setState(() => _eurAmount = v),
                   ),
-                  if (showWeight) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _weight,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        decoration: const InputDecoration(
-                            labelText: 'Gewicht', suffixText: 'g/Stk'),
+                  const SizedBox(height: 6),
+                  if (_fetchingPrice)
+                    Text('Live-Preis wird geladen...',
+                        style: theme.textTheme.bodyMedium)
+                  else if (_spotPrice > 0 && _eurAmount > 0)
+                    Text(
+                      '≈ ${(_eurAmount / _spotPrice).toStringAsFixed(4)} oz  ·  Kurs: ${CurrencyFormatter.format(_spotPrice)}/oz',
+                      style: theme.textTheme.bodyMedium,
+                    )
+                  else if (_spotPrice > 0)
+                    Text(
+                      'Aktueller Kurs: ${CurrencyFormatter.format(_spotPrice)}/oz',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _ozQty,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          decoration: const InputDecoration(
+                              labelText: 'Menge', suffixText: 'oz'),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return 'Pflichtfeld';
+                            if (double.tryParse(v.trim().replaceAll(',', '.')) == null) return 'Ungültig';
+                            return null;
+                          },
+                          onChanged: (_) => setState(() {}),
+                        ),
                       ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: CurrencyInputField(
+                          label: 'Kaufpreis gesamt',
+                          initialValue: _buyPrice > 0 ? _buyPrice : null,
+                          onChanged: (v) => setState(() => _buyPrice = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_spotPrice > 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Aktueller Kurs: ${CurrencyFormatter.format(_spotPrice)}/oz',
+                      style: theme.textTheme.bodyMedium,
                     ),
                   ],
                 ],
-              ),
-              const SizedBox(height: 12),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: CurrencyInputField(
-                      label: 'Kaufpreis',
-                      initialValue: _buyPrice,
-                      onChanged: (v) => setState(() => _buyPrice = v),
+              ]
+              // ── Non-metal inputs ───────────────────────────────────────────
+              else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: CurrencyInputField(
+                        label: 'Kaufpreis',
+                        initialValue: _buyPrice > 0 ? _buyPrice : null,
+                        onChanged: (v) => setState(() => _buyPrice = v),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: CurrencyInputField(
-                      label: 'Aktueller Wert',
-                      initialValue: _currentValue,
-                      onChanged: (v) => setState(() => _currentValue = v),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: CurrencyInputField(
+                        label: 'Aktueller Wert',
+                        initialValue: _currentValue > 0 ? _currentValue : null,
+                        onChanged: (v) => setState(() => _currentValue = v),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+                  ],
+                ),
+              ],
 
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _notes,
-                decoration: const InputDecoration(
-                    labelText: 'Notizen (optional)'),
+                decoration:
+                    const InputDecoration(labelText: 'Notizen (optional)'),
                 maxLines: 2,
               ),
               const SizedBox(height: 24),
@@ -514,8 +684,7 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
                         )
                       : Text(
                           _isEdit ? 'Speichern' : 'Hinzufügen',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                 ),
               ),

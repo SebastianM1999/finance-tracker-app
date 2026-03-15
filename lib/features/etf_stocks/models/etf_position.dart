@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class EtfPosition {
   const EtfPosition({
     required this.id,
-    required this.broker,
+    this.broker = '',
     required this.name,
     this.ticker,
     required this.shares,
@@ -17,7 +17,7 @@ class EtfPosition {
   });
 
   final String id;
-  final String broker;
+  final String broker; // kept for backward-compat with existing Firestore docs
   final String name;
   final String? ticker;
   final double shares;
@@ -38,7 +38,7 @@ class EtfPosition {
     final d = doc.data() as Map<String, dynamic>;
     return EtfPosition(
       id: doc.id,
-      broker: d['broker'] as String,
+      broker: (d['broker'] as String?) ?? '',
       name: d['name'] as String,
       ticker: d['ticker'] as String?,
       shares: (d['shares'] as num).toDouble(),

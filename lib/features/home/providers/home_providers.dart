@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/services/price_refresh_service.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../crypto/data/crypto_repository.dart';
 import '../../etf_stocks/data/etf_repository.dart';
@@ -46,6 +47,14 @@ final schuldenRepositoryProvider = Provider<SchuldenRepository>((ref) {
 final netWorthRepositoryProvider = Provider<NetWorthRepository>((ref) {
   final uid = ref.watch(currentUserProvider)!.uid;
   return NetWorthRepository(uid);
+});
+
+final priceRefreshServiceProvider = Provider<PriceRefreshService>((ref) {
+  return PriceRefreshService(
+    cryptoRepo: ref.watch(cryptoRepositoryProvider),
+    etfRepo: ref.watch(etfRepositoryProvider),
+    assetsRepo: ref.watch(assetsRepositoryProvider),
+  );
 });
 
 // ── Live data streams ─────────────────────────────────────────────────────────

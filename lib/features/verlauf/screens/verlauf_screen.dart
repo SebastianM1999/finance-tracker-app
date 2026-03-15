@@ -10,6 +10,12 @@ import '../../home/providers/home_providers.dart';
 
 // ── Range state ───────────────────────────────────────────────────────────────
 
+String _fmtY(double v) {
+  if (v.abs() >= 1000000) return '€${(v / 1000000).toStringAsFixed(1)}M';
+  if (v.abs() >= 1000) return '€${(v / 1000).toStringAsFixed(0)}k';
+  return '€${v.toStringAsFixed(0)}';
+}
+
 final _verlaufRangeProvider = StateProvider<int>((ref) => 30);
 
 // days value → human label
@@ -260,7 +266,7 @@ class _HistoryChartState extends State<_HistoryChart> {
     return GestureDetector(
       child: Container(
         height: 260,
-        padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+        padding: const EdgeInsets.fromLTRB(0, 16, 16, 8),
         decoration: BoxDecoration(
           color: AppColors.darkSurface,
           borderRadius: BorderRadius.circular(16),
@@ -280,7 +286,23 @@ class _HistoryChartState extends State<_HistoryChart> {
               ),
             ),
             titlesData: FlTitlesData(
-              leftTitles: const AxisTitles(),
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 52,
+                  getTitlesWidget: (value, meta) => Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Text(
+                      _fmtY(value),
+                      style: const TextStyle(
+                        color: AppColors.darkTextSecondary,
+                        fontSize: 10,
+                      ),
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+                ),
+              ),
               rightTitles: const AxisTitles(),
               topTitles: const AxisTitles(),
               bottomTitles: AxisTitles(

@@ -4,17 +4,64 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../shared/data/known_assets.dart';
+import '../../../shared/services/price_service.dart';
+import '../../../shared/widgets/asset_search_sheet.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/currency_input_field.dart';
 import '../../../shared/widgets/shimmer_loading.dart';
 import '../../home/providers/home_providers.dart';
 import '../models/etf_position.dart';
 
-class EtfTabBody extends ConsumerWidget {
+class EtfTabBody extends ConsumerStatefulWidget {
   const EtfTabBody({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EtfTabBody> createState() => _EtfTabBodyState();
+}
+
+class _EtfTabBodyState extends ConsumerState<EtfTabBody> {
+  bool _refreshing = false;
+
+  Future<void> _refreshAll(List<EtfPosition> list) async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    final repo = ref.read(etfRepositoryProvider);
+    int updated = 0;
+    for (final pos in list) {
+      if (pos.ticker == null) continue;
+      final result = await PriceService.fetchStockOrEtfPrice(
+        pos.ticker!,
+        isEtf: pos.assetType == 'ETF',
+      );
+      if (result != null) {
+        await repo.update(EtfPosition(
+          id: pos.id,
+          broker: pos.broker,
+          name: pos.name,
+          ticker: pos.ticker,
+          shares: pos.shares,
+          buyPrice: pos.buyPrice,
+          currentPrice: result.price,
+          currency: pos.currency,
+          assetType: pos.assetType,
+          lastPriceUpdate: DateTime.now(),
+          notes: pos.notes,
+          createdAt: pos.createdAt,
+        ));
+        updated++;
+      }
+    }
+    if (!mounted) return;
+    setState(() => _refreshing = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('$updated von ${list.length} Kurse aktualisiert'),
+      duration: const Duration(seconds: 3),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final stream = ref.watch(etfStreamProvider);
     final total = ref.watch(etfTotalProvider);
 
@@ -27,13 +74,16 @@ class EtfTabBody extends ConsumerWidget {
             ? const _EmptyState()
             : Column(
                 children: [
-                  _TotalBanner(total: total, list: list),
+                  _TotalBanner(
+                    total: total,
+                    list: list,
+                  ),
+                  const _PullHint(),
                   Expanded(
                     child: RefreshIndicator(
-                      onRefresh: () async =>
-                          ref.invalidate(etfStreamProvider),
+                      onRefresh: () => _refreshAll(list),
                       child: ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
                         itemCount: list.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: 12),
@@ -46,15 +96,14 @@ class EtfTabBody extends ConsumerWidget {
               ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showSheet(context, ref),
+        onPressed: () => _showSheet(context),
         icon: const Icon(Icons.add),
         label: const Text('Position hinzufügen'),
       ),
     );
   }
 
-  void _showSheet(BuildContext context, WidgetRef ref,
-      [EtfPosition? position]) {
+  void _showSheet(BuildContext context, [EtfPosition? position]) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -64,10 +113,41 @@ class EtfTabBody extends ConsumerWidget {
   }
 }
 
+// ── Pull Hint ─────────────────────────────────────────────────────────────────
+
+class _PullHint extends StatelessWidget {
+  const _PullHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.keyboard_arrow_down,
+              size: 13, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45)),
+          const SizedBox(width: 3),
+          Text(
+            'Zum Aktualisieren runterziehen',
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Total Banner ──────────────────────────────────────────────────────────────
 
 class _TotalBanner extends StatelessWidget {
-  const _TotalBanner({required this.total, required this.list});
+  const _TotalBanner({
+    required this.total,
+    required this.list,
+  });
   final double total;
   final List<EtfPosition> list;
 
@@ -138,6 +218,14 @@ class _EtfCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final pnlPos = position.pnlAbsolute >= 0;
+    final gradient = position.assetType == 'ETF'
+        ? AppColors.gradientEtf
+        : AppColors.gradientPhysical;
+    final tickerDisplay = position.ticker ??
+        (position.name.length < 4
+            ? position.name
+            : position.name.substring(0, 4))
+            .toUpperCase();
 
     return Dismissible(
       key: Key(position.id),
@@ -173,27 +261,8 @@ class _EtfCard extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Icon
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: AppColors.gradientEtf),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Text(
-                      position.assetType == 'ETF' ? 'ETF' : '📈',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
+                _TickerBadge(ticker: tickerDisplay, gradient: gradient),
                 const SizedBox(width: 12),
-                // Name + broker
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,10 +271,11 @@ class _EtfCard extends ConsumerWidget {
                           style: theme.textTheme.titleMedium,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
-                      Text(
-                        '${position.broker}${position.ticker != null ? ' · ${position.ticker}' : ''}',
-                        style: theme.textTheme.bodyMedium,
-                      ),
+                      if (position.ticker != null)
+                        Text(
+                          position.ticker!,
+                          style: theme.textTheme.bodyMedium,
+                        ),
                       Text(
                         '${position.shares} Anteile · Ø ${CurrencyFormatter.format(position.buyPrice)}',
                         style: theme.textTheme.bodySmall,
@@ -213,7 +283,6 @@ class _EtfCard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                // Value + P&L
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -245,27 +314,6 @@ class _EtfCard extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    // Update price button
-                    GestureDetector(
-                      onTap: () => _showPriceDialog(context, ref),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4FACFE)
-                              .withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'Preis aktualisieren',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF4FACFE),
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ],
@@ -275,45 +323,35 @@ class _EtfCard extends ConsumerWidget {
       ),
     );
   }
+}
 
-  void _showPriceDialog(BuildContext context, WidgetRef ref) {
-    double newPrice = position.currentPrice;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Preis aktualisieren'),
-        content: CurrencyInputField(
-          label: 'Aktueller Kurs',
-          initialValue: position.currentPrice,
-          onChanged: (v) => newPrice = v,
+// ── Ticker Badge ──────────────────────────────────────────────────────────────
+
+class _TickerBadge extends StatelessWidget {
+  const _TickerBadge({required this.ticker, required this.gradient});
+  final String ticker;
+  final List<Color> gradient;
+
+  @override
+  Widget build(BuildContext context) {
+    final display = ticker.length > 5 ? ticker.substring(0, 5) : ticker;
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: gradient),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Center(
+        child: Text(
+          display,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Abbrechen'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final updated = EtfPosition(
-                id: position.id,
-                broker: position.broker,
-                name: position.name,
-                ticker: position.ticker,
-                shares: position.shares,
-                buyPrice: position.buyPrice,
-                currentPrice: newPrice,
-                currency: position.currency,
-                assetType: position.assetType,
-                lastPriceUpdate: DateTime.now(),
-                notes: position.notes,
-                createdAt: position.createdAt,
-              );
-              await ref.read(etfRepositoryProvider).update(updated);
-            },
-            child: const Text('Speichern'),
-          ),
-        ],
       ),
     );
   }
@@ -336,7 +374,8 @@ class _EmptyState extends StatelessWidget {
               gradient: const LinearGradient(colors: AppColors.gradientEtf),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(Icons.trending_up, color: Colors.white, size: 36),
+            child: const Icon(Icons.trending_up,
+                color: Colors.white, size: 36),
           ),
           const SizedBox(height: 16),
           Text('Noch keine Positionen',
@@ -365,7 +404,6 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
 
   late final TextEditingController _name;
   late final TextEditingController _ticker;
-  late final TextEditingController _broker;
   late final TextEditingController _shares;
   late final TextEditingController _notes;
 
@@ -373,8 +411,20 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
   double _currentPrice = 0;
   String _assetType = 'ETF';
   bool _saving = false;
+  bool _fetchingPrice = false;
+
+  // Picker state — only used in add mode
+  KnownEtf? _pickedAsset;
+  bool _manualEntry = false;
+
+  // Input mode toggle
+  bool _useEurMode = false;
+  double _eurAmount = 0;
 
   bool get _isEdit => widget.position != null;
+
+  bool get _showPicker =>
+      !_isEdit && _pickedAsset == null && !_manualEntry;
 
   @override
   void initState() {
@@ -382,7 +432,6 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
     final p = widget.position;
     _name = TextEditingController(text: p?.name ?? '');
     _ticker = TextEditingController(text: p?.ticker ?? '');
-    _broker = TextEditingController(text: p?.broker ?? '');
     _shares = TextEditingController(
         text: p != null ? p.shares.toString() : '');
     _notes = TextEditingController(text: p?.notes ?? '');
@@ -395,10 +444,43 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
   void dispose() {
     _name.dispose();
     _ticker.dispose();
-    _broker.dispose();
     _shares.dispose();
     _notes.dispose();
     super.dispose();
+  }
+
+  void _onAssetPicked(KnownEtf asset) {
+    setState(() {
+      _pickedAsset = asset;
+      _name.text = asset.name;
+      _ticker.text = asset.ticker;
+      _assetType = asset.type == 'Aktie' ? 'Stock' : 'ETF';
+      _fetchingPrice = true;
+    });
+    PriceService.fetchStockOrEtfPrice(
+      asset.ticker,
+      isEtf: asset.type == 'ETF',
+    ).then((result) {
+      if (!mounted) return;
+      setState(() {
+        _fetchingPrice = false;
+        if (result != null) {
+          _currentPrice = result.price;
+          _buyPrice = result.price;
+        }
+      });
+    });
+  }
+
+  void _clearPick() {
+    setState(() {
+      _pickedAsset = null;
+      _name.clear();
+      _ticker.clear();
+      _assetType = 'ETF';
+      _buyPrice = 0;
+      _currentPrice = 0;
+    });
   }
 
   Future<void> _save() async {
@@ -406,12 +488,13 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
     setState(() => _saving = true);
     try {
       final repo = ref.read(etfRepositoryProvider);
-      final shares =
-          double.tryParse(_shares.text.trim().replaceAll(',', '.')) ?? 0;
+      final shares = _useEurMode
+          ? (_buyPrice > 0 ? _eurAmount / _buyPrice : 0.0)
+          : (double.tryParse(_shares.text.trim().replaceAll(',', '.')) ?? 0.0);
       final now = DateTime.now();
       final p = EtfPosition(
         id: widget.position?.id ?? '',
-        broker: _broker.text.trim(),
+        broker: widget.position?.broker ?? '',
         name: _name.text.trim(),
         ticker: _ticker.text.trim().isEmpty ? null : _ticker.text.trim(),
         shares: shares,
@@ -424,7 +507,39 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
       if (_isEdit) {
         await repo.update(p);
       } else {
-        await repo.add(p);
+        // Auto-merge if a position with the same ticker (or name) already exists
+        final existing = ref.read(etfStreamProvider).valueOrNull ?? [];
+        final match = existing.where((e) {
+          if (p.ticker != null && e.ticker != null) {
+            return e.ticker!.toUpperCase() == p.ticker!.toUpperCase();
+          }
+          return e.name.toUpperCase() == p.name.toUpperCase();
+        }).firstOrNull;
+        if (match != null) {
+          final totalShares = match.shares + p.shares;
+          final avgBuy = totalShares > 0
+              ? (match.shares * match.buyPrice + p.shares * p.buyPrice) / totalShares
+              : p.buyPrice;
+          await repo.update(EtfPosition(
+            id: match.id,
+            broker: match.broker,
+            name: match.name,
+            ticker: match.ticker,
+            shares: totalShares,
+            buyPrice: avgBuy,
+            currentPrice: p.currentPrice,
+            assetType: match.assetType,
+            notes: match.notes,
+            createdAt: match.createdAt,
+          ));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Mit bestehender ${match.name}-Position zusammengeführt'),
+            ));
+          }
+        } else {
+          await repo.add(p);
+        }
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -441,13 +556,18 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final shares =
-        double.tryParse(_shares.text.replaceAll(',', '.')) ?? 0;
+    final shares = _useEurMode && _buyPrice > 0
+        ? _eurAmount / _buyPrice
+        : (double.tryParse(_shares.text.replaceAll(',', '.')) ?? 0);
     final previewValue =
         shares > 0 && _currentPrice > 0 ? shares * _currentPrice : null;
     final previewPnl = previewValue != null && _buyPrice > 0
         ? previewValue - (shares * _buyPrice)
         : null;
+
+    final gradient = _assetType == 'ETF'
+        ? AppColors.gradientEtf
+        : AppColors.gradientPhysical;
 
     return Container(
       decoration: BoxDecoration(
@@ -480,170 +600,258 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
               ),
               const SizedBox(height: 16),
 
-              // ETF / Stock toggle
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'ETF', label: Text('ETF')),
-                  ButtonSegment(value: 'Stock', label: Text('Aktie')),
-                ],
-                selected: {_assetType},
-                onSelectionChanged: (s) =>
-                    setState(() => _assetType = s.first),
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _name,
-                decoration: const InputDecoration(
-                    labelText: 'Name (z.B. MSCI World, Apple)'),
-                validator: (v) =>
-                    v?.trim().isEmpty == true ? 'Pflichtfeld' : null,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _ticker,
-                      decoration: const InputDecoration(
-                          labelText: 'Ticker (optional)'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _broker,
-                      decoration: const InputDecoration(
-                          labelText: 'Broker'),
-                      validator: (v) =>
-                          v?.trim().isEmpty == true ? 'Pflichtfeld' : null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _shares,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration:
-                    const InputDecoration(labelText: 'Anzahl Anteile'),
-                onChanged: (_) => setState(() {}),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Pflichtfeld';
-                  if (double.tryParse(v.trim().replaceAll(',', '.')) == null) {
-                    return 'Ungültig';
-                  }
-                  return null;
+              // ── Asset Picker (always shown) ───────────────────────────────
+              AssetPickerRow(
+                label: _isEdit ? 'Asset neu zuordnen (optional)' : 'ETF / Aktie auswählen...',
+                selectedName: _pickedAsset?.name,
+                selectedTag: _pickedAsset != null
+                    ? (_pickedAsset!.type == 'ETF' ? 'ETF' : '📈')
+                    : null,
+                gradient: gradient,
+                onTap: () async {
+                  final picked = await showEtfSearchSheet(context);
+                  if (picked != null) _onAssetPicked(picked);
                 },
+                onClear: _pickedAsset != null ? _clearPick : null,
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: CurrencyInputField(
-                      label: 'Kaufkurs',
-                      initialValue: _buyPrice,
-                      onChanged: (v) => setState(() => _buyPrice = v),
-                    ),
+              const SizedBox(height: 6),
+              if (_showPicker)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () =>
+                        setState(() => _manualEntry = true),
+                    style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap),
+                    child: const Text('Manuell eingeben',
+                        style: TextStyle(fontSize: 12)),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: CurrencyInputField(
-                      label: 'Aktueller Kurs',
-                      initialValue: _currentPrice,
-                      onChanged: (v) => setState(() => _currentPrice = v),
+                ),
+              const SizedBox(height: 4),
+
+              // ── Asset type toggle + Name + Ticker (edit / manual) ─────────
+              if (_isEdit || _manualEntry) ...[
+                SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: 'ETF', label: Text('ETF')),
+                    ButtonSegment(value: 'Stock', label: Text('Aktie')),
+                  ],
+                  selected: {_assetType},
+                  onSelectionChanged: (s) =>
+                      setState(() => _assetType = s.first),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _name,
+                  decoration: const InputDecoration(
+                      labelText: 'Name (z.B. MSCI World, Apple)'),
+                  validator: (v) =>
+                      v?.trim().isEmpty == true ? 'Pflichtfeld' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _ticker,
+                  decoration:
+                      const InputDecoration(labelText: 'Ticker (optional)'),
+                ),
+              ],
+
+              // Hidden validators for picker mode
+              if (!_isEdit && _pickedAsset != null) ...[
+                Offstage(
+                  child: TextFormField(
+                    controller: _name,
+                    validator: (v) =>
+                        v?.trim().isEmpty == true ? 'Pflichtfeld' : null,
+                  ),
+                ),
+              ],
+
+              // ── Rest of form (once asset chosen) ──────────────────────────
+              if (_isEdit || _manualEntry || _pickedAsset != null) ...[
+                const SizedBox(height: 12),
+                SegmentedButton<bool>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('Anzahl Anteile')),
+                    ButtonSegment(value: true, label: Text('€ Betrag')),
+                  ],
+                  selected: {_useEurMode},
+                  onSelectionChanged: (s) =>
+                      setState(() => _useEurMode = s.first),
+                ),
+                const SizedBox(height: 12),
+                if (_useEurMode) ...[
+                  CurrencyInputField(
+                    label: 'Investierter Betrag',
+                    initialValue: _eurAmount > 0 ? _eurAmount : null,
+                    onChanged: (v) => setState(() => _eurAmount = v),
+                  ),
+                  if (_buyPrice > 0 && _eurAmount > 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '≈ ${CurrencyFormatter.formatCryptoAmount(_eurAmount / _buyPrice)} Anteile',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
+                  ],
+                ] else ...[
+                  TextFormField(
+                    controller: _shares,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    decoration:
+                        const InputDecoration(labelText: 'Anzahl Anteile'),
+                    onChanged: (_) => setState(() {}),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Pflichtfeld';
+                      final parsed = double.tryParse(v.trim().replaceAll(',', '.'));
+                      if (parsed == null) return 'Ungültig';
+                      if (parsed <= 0) return 'Anzahl muss größer als 0 sein';
+                      return null;
+                    },
                   ),
                 ],
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-              // Preview
-              if (previewValue != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: AppColors.gradientEtf),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                if (_fetchingPrice)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Live-Preis wird geladen...',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.6)),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Row(
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Aktueller Wert',
-                              style: TextStyle(
-                                  color: Colors.white70, fontSize: 12)),
-                          Text(
-                            CurrencyFormatter.format(previewValue),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ],
+                      Expanded(
+                        child: CurrencyInputField(
+                          label: 'Kaufkurs',
+                          initialValue: _buyPrice,
+                          onChanged: (v) => setState(() => _buyPrice = v),
+                        ),
                       ),
-                      if (previewPnl != null)
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: CurrencyInputField(
+                          label: 'Aktueller Kurs',
+                          initialValue: _currentPrice,
+                          onChanged: (v) =>
+                              setState(() => _currentPrice = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 12),
+
+                if (previewValue != null && !_fetchingPrice) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: gradient),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
                         Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('P&L',
+                            const Text('Aktueller Wert',
                                 style: TextStyle(
                                     color: Colors.white70, fontSize: 12)),
                             Text(
-                              CurrencyFormatter.formatPnl(previewPnl),
-                              style: TextStyle(
-                                color: previewPnl >= 0
-                                    ? const Color(0xFFB8F5D8)
-                                    : const Color(0xFFFFB3B3),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
+                              CurrencyFormatter.format(previewValue),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 18,
                               ),
                             ),
                           ],
                         ),
-                    ],
+                        if (previewPnl != null)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Text('P&L',
+                                  style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12)),
+                              Text(
+                                CurrencyFormatter.formatPnl(previewPnl),
+                                style: TextStyle(
+                                  color: previewPnl >= 0
+                                      ? const Color(0xFFB8F5D8)
+                                      : const Color(0xFFFFB3B3),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              if (previewValue != null) const SizedBox(height: 12),
+                  const SizedBox(height: 12),
+                ],
 
-              TextFormField(
-                controller: _notes,
-                decoration: const InputDecoration(
-                    labelText: 'Notizen (optional)'),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _saving ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _saving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : Text(
-                          _isEdit ? 'Speichern' : 'Hinzufügen',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600),
-                        ),
+                TextFormField(
+                  controller: _notes,
+                  decoration: const InputDecoration(
+                      labelText: 'Notizen (optional)'),
+                  maxLines: 2,
                 ),
-              ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: (_saving || _fetchingPrice) ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white),
+                          )
+                        : Text(
+                            _isEdit ? 'Speichern' : 'Hinzufügen',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600),
+                          ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
