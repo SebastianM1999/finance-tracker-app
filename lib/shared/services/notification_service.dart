@@ -108,6 +108,25 @@ class NotificationService {
     return scheduledIds;
   }
 
+  /// Show an immediate test notification.
+  Future<void> showTestNotification() async {
+    if (kIsWeb) return;
+    await _plugin.show(
+      888888,
+      '🔔 Festgeld-Erinnerung Test',
+      'Push-Benachrichtigungen funktionieren!',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+    );
+  }
+
   /// Returns true if the user has notifications enabled for this app.
   Future<bool> areNotificationsEnabled() async {
     if (kIsWeb) return false;
@@ -135,82 +154,6 @@ class NotificationService {
                 AndroidFlutterLocalNotificationsPlugin>()
             ?.canScheduleExactNotifications() ??
         true; // iOS / non-Android: assume yes
-  }
-
-  /// Show an immediate notification (no scheduling) to verify the pipeline works.
-  Future<void> showImmediateTestNotification() async {
-    if (kIsWeb) return;
-    await _plugin.show(
-      888888,
-      '🔔 Test-Benachrichtigung',
-      'Push-Notifications funktionieren!',
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: const DarwinNotificationDetails(),
-      ),
-    );
-    // Also fire a delayed one via Future.delayed (bypasses AlarmManager)
-    Future.delayed(const Duration(seconds: 10), () {
-      _plugin.show(
-        777777,
-        '🔔 Test (Future.delayed)',
-        'In-process delayed notification!',
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channelId,
-            _channelName,
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-          iOS: const DarwinNotificationDetails(),
-        ),
-      );
-    });
-  }
-
-  /// Schedule a test notification firing in 10 seconds.
-  /// Falls back to inexact mode if exact alarm permission is not granted.
-  Future<void> scheduleTestNotification() async {
-    if (kIsWeb) return;
-    final now = DateTime.now();
-    var triggerTime = DateTime(now.year, now.month, now.day, 0, 1);
-    if (!triggerTime.isAfter(now)) {
-      triggerTime = triggerTime.add(const Duration(days: 1));
-    }
-    final exact = await canScheduleExact();
-    final tzTime = _toTZDateTime(triggerTime);
-    debugPrint('[Notif] canScheduleExact=$exact');
-    debugPrint('[Notif] now=${DateTime.now()}, triggerTime=$triggerTime, tzTime=$tzTime');
-    try {
-      await _plugin.zonedSchedule(
-        999999,
-        '🔔 Test (geplant)',
-        'Geplante Benachrichtigung funktioniert!',
-        tzTime,
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channelId,
-            _channelName,
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-          iOS: const DarwinNotificationDetails(),
-        ),
-        androidScheduleMode: AndroidScheduleMode.alarmClock,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-      debugPrint('[Notif] zonedSchedule succeeded');
-      final pending = await _plugin.pendingNotificationRequests();
-      debugPrint('[Notif] pending count=${pending.length}, ids=${pending.map((p) => p.id).toList()}');
-    } catch (e, st) {
-      debugPrint('[Notif] zonedSchedule ERROR: $e\n$st');
-    }
   }
 
   /// Cancel all notifications for a Festgeld entry.

@@ -1,11 +1,11 @@
 import 'dart:convert';
 
+import 'package:app_settings/app_settings.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:app_settings/app_settings.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/services/notification_service.dart';
@@ -13,7 +13,6 @@ import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/profile_image_stub.dart'
     if (dart.library.js_interop) '../../../shared/widgets/profile_image_web.dart';
 import '../../auth/providers/auth_providers.dart';
-import '../../home/models/net_worth_snapshot.dart';
 import '../../home/providers/home_providers.dart';
 import '../providers/settings_providers.dart';
 
@@ -104,6 +103,9 @@ class SettingsScreen extends ConsumerWidget {
                                     color: AppColors.darkPositive)
                                 : const Icon(Icons.cancel_outlined,
                                     color: AppColors.darkSecondary),
+                            onTap: notifEnabled
+                                ? () => NotificationService.instance.showTestNotification()
+                                : null,
                           ),
                           if (!notifEnabled) ...[
                             Divider(height: 1, color: Theme.of(context).colorScheme.outline),
@@ -130,15 +132,6 @@ class SettingsScreen extends ConsumerWidget {
                                   .requestExactAlarmsPermission(),
                             ),
                           ],
-                          Divider(height: 1, color: Theme.of(context).colorScheme.outline),
-                          ListTile(
-                            leading: const Icon(Icons.notifications_active_outlined,
-                                color: AppColors.darkPrimary),
-                            title: const Text('Test-Benachrichtigung'),
-                            subtitle: const Text('Sofort + geplant um 00:01 Uhr'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => _sendTestNotification(context),
-                          ),
                         ],
                       );
                     },
@@ -158,16 +151,6 @@ class SettingsScreen extends ConsumerWidget {
                   title: const Text('Als JSON exportieren'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _exportJson(context, ref),
-                ),
-                Divider(height: 1, color: theme.colorScheme.outline),
-                Divider(height: 1, color: theme.colorScheme.outline),
-                ListTile(
-                  leading: const Icon(Icons.auto_graph_outlined,
-                      color: AppColors.darkPrimary),
-                  title: const Text('Verlauf-Testdaten generieren'),
-                  subtitle: const Text('12 Monate Mock-Daten'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _seedMockHistory(context, ref),
                 ),
                 Divider(height: 1, color: theme.colorScheme.outline),
                 ListTile(
@@ -207,22 +190,6 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _sendTestNotification(BuildContext context) async {
-    // Fire one immediately + one scheduled in 10s
-    await Future.wait([
-      NotificationService.instance.showImmediateTestNotification(),
-      NotificationService.instance.scheduleTestNotification(),
-    ]);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sofort-Notification + geplante in 10s ✓'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
   Future<void> _exportJson(BuildContext context, WidgetRef ref) async {
     try {
       final giro = ref.read(giroStreamProvider).valueOrNull ?? [];
@@ -242,7 +209,10 @@ class SettingsScreen extends ConsumerWidget {
         'schulden': schulden.map((e) => e.toFirestore()).toList(),
       };
 
-      final json = const JsonEncoder.withIndent('  ').convert(data);
+      final json = JsonEncoder.withIndent('  ', (obj) {
+        if (obj is Timestamp) return obj.toDate().toIso8601String();
+        throw UnsupportedError('Cannot encode ${obj.runtimeType}');
+      }).convert(data);
       await Clipboard.setData(ClipboardData(text: json));
 
       if (context.mounted) {
@@ -258,70 +228,6 @@ class SettingsScreen extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Export fehlgeschlagen: $e')),
         );
-      }
-    }
-  }
-
-  Future<void> _seedMockHistory(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Testdaten generieren',
-      message: 'Es werden 365 Mock-Snapshots für die letzten 12 Monate erstellt. Bestehende Einträge werden überschrieben.',
-      confirmLabel: 'Generieren',
-    );
-    if (!confirmed) return;
-
-    try {
-      final repo = ref.read(netWorthRepositoryProvider);
-      final now = DateTime.now();
-
-      // Realistic starting values 12 months ago, growing toward today's totals
-      const startTotal = 22000.0;
-      const endTotal = 34972.0;
-
-      for (int i = 365; i >= 0; i--) {
-        final date = now.subtract(Duration(days: i));
-        final progress = (365 - i) / 365;
-
-        // Smooth growth with realistic noise
-        final trend = startTotal + (endTotal - startTotal) * progress;
-        // Add weekly volatility
-        final noise = (date.weekday % 3 - 1) * 180.0;
-        // Add a market dip around month 4
-        final dip = (progress > 0.28 && progress < 0.38) ? -1800.0 * ((0.33 - (progress - 0.28).abs()) / 0.33) : 0.0;
-        final total = trend + noise + dip;
-
-        // Split across categories
-        final giro = 15000.0 + noise * 0.1;
-        final festgeld = 8000.0;
-        final etf = 1200.0 + (endTotal - startTotal) * progress * 0.04;
-        final crypto = 4500.0 + (endTotal - startTotal) * progress * 0.25 + noise * 0.5 + dip;
-        final physical = 4500.0 + (endTotal - startTotal) * progress * 0.12;
-        final schulden = -500.0;
-
-        final snapshot = NetWorthSnapshot(
-          id: '',
-          totalNetWorth: total + schulden,
-          giro: giro,
-          festgeld: festgeld,
-          etfStocks: etf,
-          crypto: crypto,
-          physical: physical,
-          schulden: schulden,
-          recordedAt: DateTime(date.year, date.month, date.day, 23, 0),
-        );
-        await repo.saveOrUpdate(snapshot);
-      }
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('366 Snapshots generiert ✓')),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Fehler: $e')));
       }
     }
   }

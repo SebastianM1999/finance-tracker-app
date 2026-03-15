@@ -16,8 +16,6 @@ class AuthUser {
 }
 
 /// Abstract interface for authentication.
-/// Currently backed by [MockAuthRepository].
-/// TODO: Replace with FirebaseAuthRepository after `flutterfire configure`.
 abstract class AuthRepository {
   Stream<AuthUser?> get authStateChanges;
   Future<void> signInWithGoogle();
