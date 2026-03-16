@@ -18,6 +18,30 @@ import '../providers/home_providers.dart';
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
+  Future<void> _refresh(BuildContext context, WidgetRef ref) async {
+    final cryptoList = ref.read(cryptoStreamProvider).valueOrNull ?? [];
+    final etfList = ref.read(etfStreamProvider).valueOrNull ?? [];
+    final assetsList = ref.read(assetsStreamProvider).valueOrNull ?? [];
+
+    final updated = await ref.read(priceRefreshServiceProvider).refreshAll(
+          cryptoList: cryptoList,
+          etfList: etfList,
+          assetsList: assetsList,
+        );
+
+    ref.invalidate(giroStreamProvider);
+    ref.invalidate(festgeldStreamProvider);
+    ref.invalidate(schuldenStreamProvider);
+    ref.invalidate(netWorthHistoryProvider);
+
+    if (context.mounted && updated > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('$updated Kurse aktualisiert'),
+        duration: const Duration(seconds: 3),
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
@@ -25,34 +49,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () async {
-          // Fetch live prices for crypto, ETF/stocks, and physical assets,
-          // then write updated values back to Firestore.
-          final cryptoList = ref.read(cryptoStreamProvider).valueOrNull ?? [];
-          final etfList = ref.read(etfStreamProvider).valueOrNull ?? [];
-          final assetsList = ref.read(assetsStreamProvider).valueOrNull ?? [];
-
-          final updated =
-              await ref.read(priceRefreshServiceProvider).refreshAll(
-                    cryptoList: cryptoList,
-                    etfList: etfList,
-                    assetsList: assetsList,
-                  );
-
-          // Invalidate the remaining providers so giro/festgeld/schulden
-          // and the chart history re-read fresh data too.
-          ref.invalidate(giroStreamProvider);
-          ref.invalidate(festgeldStreamProvider);
-          ref.invalidate(schuldenStreamProvider);
-          ref.invalidate(netWorthHistoryProvider);
-
-          if (context.mounted && updated > 0) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('$updated Kurse aktualisiert'),
-              duration: const Duration(seconds: 3),
-            ));
-          }
-        },
+        onRefresh: () => _refresh(context, ref),
         child: CustomScrollView(
           slivers: [
             SliverAppBar(
@@ -522,7 +519,7 @@ class _UpcomingMaturityBanner extends ConsumerWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              '${next.bankName} – ${DateFormatter.daysRemaining(next.endDate)} (${CurrencyFormatter.format(next.amount)})',
+              '${next.bankName} – ${DateFormatter.daysRemaining(next.endDate)} (${CurrencyFormatter.format(next.projectedPayout)})',
               style: const TextStyle(
                   color: AppColors.darkWarning,
                   fontSize: 13,

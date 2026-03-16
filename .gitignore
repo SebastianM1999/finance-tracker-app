@@ -50,3 +50,6 @@ app.*.map.json
 # Signing
 android/key.properties
 android/app/fintrack-release.jks
+
+# Firebase local cache
+.firebase/
