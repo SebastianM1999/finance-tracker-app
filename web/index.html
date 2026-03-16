@@ -14,12 +14,18 @@
   <link rel="manifest" href="manifest.json">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; background: #0D0F14; display: flex; justify-content: center; }
+    html, body { height: 100%; background: #0D0F14; }
     #flutter_target {
-      width: 430px;
+      width: 100%;
       height: 100vh;
       position: relative;
-      flex-shrink: 0;
+    }
+    @media (min-width: 600px) {
+      html, body { display: flex; justify-content: center; }
+      #flutter_target {
+        width: 430px;
+        flex-shrink: 0;
+      }
     }
   </style>
   <script src="flutter_bootstrap.js" async></script>
