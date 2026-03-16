@@ -32,9 +32,6 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
 
-  # Formatting
-  intl: 0.19.0
-
   # Persistence
   shared_preferences: ^2.3.3
 
