@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../data/known_assets.dart';
+import '../services/price_service.dart';
 
 // ── Crypto Search ─────────────────────────────────────────────────────────────
 
@@ -83,45 +86,172 @@ class _EtfSearchSheet extends StatefulWidget {
 }
 
 class _EtfSearchSheetState extends State<_EtfSearchSheet> {
-  final _ctrl = TextEditingController();
-  String _query = '';
+  static String _savedQuery = '';
 
-  List<KnownEtf> get _filtered {
-    if (_query.isEmpty) return KnownAssets.etfsAndStocks;
-    final words = _query.toLowerCase().split(RegExp(r'\s+'));
-    return KnownAssets.etfsAndStocks.where((e) {
-      final haystack = '${e.name} ${e.ticker} ${e.exchange}'.toLowerCase();
-      return words.every((w) => haystack.contains(w));
-    }).toList();
+  late final TextEditingController _ctrl;
+  Timer? _debounce;
+  String _query = '';
+  List<YahooSearchResult> _results = [];
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: _savedQuery);
+    _query = _savedQuery;
+    if (_savedQuery.isNotEmpty) {
+      _loading = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _runSearch(_savedQuery));
+    }
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _ctrl.dispose();
     super.dispose();
+  }
+
+  void _onSearch(String v) {
+    _debounce?.cancel();
+    _savedQuery = v.trim();
+    setState(() => _query = v.trim());
+    if (v.trim().isEmpty) {
+      setState(() { _results = []; _loading = false; });
+      return;
+    }
+    setState(() => _loading = true);
+    _debounce = Timer(const Duration(milliseconds: 400), () => _runSearch(v.trim()));
+  }
+
+  Future<void> _runSearch(String q) async {
+    final local = _localFallback(q);
+    final yahoo = await PriceService.searchAssets(q);
+    final localSymbols = local.map((e) => e.symbol.toUpperCase()).toSet();
+    final extra = yahoo.where((e) => !localSymbols.contains(e.symbol.toUpperCase())).toList();
+    if (mounted) setState(() { _results = [...local, ...extra]; _loading = false; });
+  }
+
+  /// Fuzzy-match against the static known list.
+  /// Any word in the query just needs to appear somewhere in name/ticker.
+  List<YahooSearchResult> _localFallback(String query) {
+    final words = query.toLowerCase()
+        .replaceAll(RegExp(r'[-_]'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    return KnownAssets.etfsAndStocks
+        .where((e) {
+          final hay = '${e.name} ${e.ticker} ${e.exchange}'
+              .toLowerCase()
+              .replaceAll(RegExp(r'[-_]'), ' ');
+          return words.every((w) => hay.contains(w));
+        })
+        .map((e) => YahooSearchResult(
+              symbol: e.ticker,
+              name: e.name,
+              type: e.type,
+              exchange: e.exchange,
+            ))
+        .toList();
+  }
+
+  int get _itemCount {
+    if (_query.isEmpty || _loading || _results.isEmpty) return 1;
+    return _results.length;
   }
 
   @override
   Widget build(BuildContext context) {
     return _SearchSheetScaffold(
-      title: 'ETF / Aktie auswählen',
+      title: 'ETF / Aktie suchen',
       searchCtrl: _ctrl,
-      onSearch: (v) => setState(() => _query = v),
-      itemCount: _filtered.length,
+      onSearch: _onSearch,
+      itemCount: _itemCount,
       itemBuilder: (ctx, i) {
-        final a = _filtered[i];
-        final isEtf = a.type == 'ETF';
+        if (_query.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(40),
+            child: Center(child: Text('Tippe einen Namen oder Ticker ein...')),
+          );
+        }
+        if (_loading) {
+          return const Padding(
+            padding: EdgeInsets.all(40),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (_results.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(40),
+            child: Center(child: Text('Keine Ergebnisse gefunden')),
+          );
+        }
+        final r = _results[i];
+        final isEtf = r.type == 'ETF';
         return _AssetTile(
           leading: _SymbolBadge(
             label: isEtf ? 'ETF' : '📈',
             gradient: isEtf ? AppColors.gradientEtf : AppColors.gradientPhysical,
           ),
-          title: a.name,
-          subtitle: a.ticker,
-          trailing: _ExchangeChip(a.exchange),
-          onTap: () => Navigator.pop(ctx, a),
+          title: r.name,
+          subtitle: r.symbol,
+          trailing: _LivePrice(ticker: r.symbol, isEtf: isEtf),
+          onTap: () => Navigator.pop(
+            ctx,
+            KnownEtf(r.name, r.symbol, r.type, r.exchange),
+          ),
         );
       },
+    );
+  }
+}
+
+// ── Live price widget ─────────────────────────────────────────────────────────
+
+class _LivePrice extends StatefulWidget {
+  const _LivePrice({required this.ticker, required this.isEtf});
+  final String ticker;
+  final bool isEtf;
+
+  @override
+  State<_LivePrice> createState() => _LivePriceState();
+}
+
+class _LivePriceState extends State<_LivePrice> {
+  double? _price;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    final result = await PriceService.fetchStockOrEtfPrice(
+      widget.ticker,
+      isEtf: widget.isEtf,
+    );
+    if (mounted) setState(() { _price = result?.price; _loading = false; });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const SizedBox(
+        width: 14,
+        height: 14,
+        child: CircularProgressIndicator(strokeWidth: 1.5),
+      );
+    }
+    if (_price == null) return const SizedBox.shrink();
+    return Text(
+      '${_price!.toStringAsFixed(2)}€',
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkPositive,
+          ),
     );
   }
 }
@@ -366,25 +496,3 @@ class _SymbolBadge extends StatelessWidget {
   }
 }
 
-class _ExchangeChip extends StatelessWidget {
-  const _ExchangeChip(this.exchange);
-  final String exchange;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        exchange,
-        style: TextStyle(
-            fontSize: 10,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-            fontWeight: FontWeight.w500),
-      ),
-    );
-  }
-}

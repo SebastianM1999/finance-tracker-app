@@ -31,6 +31,7 @@ dependencies:
   # Notifications
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
+  flutter_timezone: ^2.0.0
 
   # Persistence
   shared_preferences: ^2.3.3
@@ -53,6 +54,9 @@ dependencies:
 
   # Open system settings pages
   app_settings: ^5.1.1
+
+  # Calendar integration
+  add_2_calendar: ^3.0.1
 
 dev_dependencies:
   flutter_test:

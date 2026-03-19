@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,6 +20,19 @@ class FinTrackApp extends ConsumerWidget {
     // Activate auto-save only when logged in
     final user = ref.watch(currentUserProvider);
     if (user != null) ref.watch(autoSaveNetWorthProvider);
+
+    final isDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+                Brightness.dark);
+
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      systemNavigationBarColor: isDark
+          ? const Color(0xFF0D0F14)
+          : const Color(0xFFF4F6FA),
+      systemNavigationBarIconBrightness:
+          isDark ? Brightness.light : Brightness.dark,
+    ));
 
     return MaterialApp.router(
       title: 'FinTrack',

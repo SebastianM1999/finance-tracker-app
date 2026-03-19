@@ -288,8 +288,10 @@ class _EtfCard extends ConsumerWidget {
                   children: [
                     Text(
                       CurrencyFormatter.format(position.currentValue),
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.darkPositive,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Row(
@@ -480,6 +482,10 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
       _assetType = 'ETF';
       _buyPrice = 0;
       _currentPrice = 0;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final picked = await showEtfSearchSheet(context);
+      if (picked != null) _onAssetPicked(picked);
     });
   }
 

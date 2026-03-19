@@ -15,18 +15,23 @@ class CurrencyFormatter {
     decimalDigits: 1,
   );
 
+  // Removes any space/non-breaking space before the € symbol
+  static String _stripEurSpace(String s) =>
+      s.replaceAll(RegExp(r'[\u00A0\s]+€'), '€');
+
   static String format(double amount, {String symbol = '€'}) {
     if (symbol != '€') {
       return NumberFormat.currency(
         locale: 'de_DE',
         symbol: symbol,
         decimalDigits: 2,
-      ).format(amount);
+      ).format(amount).replaceAll(RegExp(r'[\u00A0\s]+' + RegExp.escape(symbol)), symbol);
     }
-    return _eurFormat.format(amount);
+    return _stripEurSpace(_eurFormat.format(amount));
   }
 
-  static String formatCompact(double amount) => _compactFormat.format(amount);
+  static String formatCompact(double amount) =>
+      _stripEurSpace(_compactFormat.format(amount));
 
   static String formatPnl(double amount) {
     final prefix = amount >= 0 ? '+' : '';
@@ -35,7 +40,7 @@ class CurrencyFormatter {
 
   static String formatPercent(double percent) {
     final prefix = percent >= 0 ? '+' : '';
-    return '$prefix${percent.toStringAsFixed(2)} %';
+    return '$prefix${percent.toStringAsFixed(2)}%';
   }
 
   /// Smart crypto amount formatting — like Coinbase/Binance:

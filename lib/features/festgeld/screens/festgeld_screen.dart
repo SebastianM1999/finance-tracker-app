@@ -1,3 +1,4 @@
+import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -440,6 +441,65 @@ class _FestgeldSheetState extends ConsumerState<_FestgeldSheet> {
     return DateTime(start.year, start.month + months, start.day);
   }
 
+  Future<void> _promptCalendarEntry({
+    required String bankName,
+    required double amount,
+    required double projectedPayout,
+    required DateTime endDate,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Kalender-Eintrag'),
+        content: Text(
+          'Soll der Fälligkeitstermin (${DateFormatter.format(endDate)}) in deinen Kalender eingetragen werden?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nein'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ja'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await _launchCalendar(
+        bankName: bankName,
+        amount: amount,
+        projectedPayout: projectedPayout,
+        endDate: endDate,
+      );
+    }
+  }
+
+  Future<void> _launchCalendar({
+    required String bankName,
+    required double amount,
+    required double projectedPayout,
+    required DateTime endDate,
+  }) async {
+    // endDate +1 day because Google Calendar uses exclusive end dates
+    // for all-day events (iCalendar format). This makes it display as
+    // a single day on the correct date.
+    final ok = await Add2Calendar.addEvent2Cal(Event(
+      title: 'Festgeld fällig: $bankName',
+      description:
+          '${CurrencyFormatter.format(amount)} + Zinsen → ${CurrencyFormatter.format(projectedPayout)}',
+      startDate: DateTime(endDate.year, endDate.month, endDate.day),
+      endDate: DateTime(endDate.year, endDate.month, endDate.day + 1),
+      allDay: true,
+    ));
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kalender-App nicht gefunden')),
+      );
+    }
+  }
+
   Future<void> _pickStartDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -477,11 +537,20 @@ class _FestgeldSheetState extends ConsumerState<_FestgeldSheet> {
         createdAt: widget.item?.createdAt ?? now,
       );
 
+      String festgeldId;
+      if (_isEdit) {
+        festgeldId = widget.item!.id;
+      } else {
+        // Save first to get the stable Firestore ID, then schedule with it
+        final docRef = await repo.add(f);
+        festgeldId = docRef.id;
+      }
+
       List<int> notifIds = [];
       if (_notificationsEnabled) {
         notifIds = await NotificationService.instance
             .scheduleFestgeldNotifications(
-          festgeldId: widget.item?.id ?? f.bankName + now.toString(),
+          festgeldId: festgeldId,
           bankName: f.bankName,
           amount: f.amount,
           endDate: f.endDate,
@@ -489,7 +558,7 @@ class _FestgeldSheetState extends ConsumerState<_FestgeldSheet> {
       }
 
       final fWithIds = Festgeld(
-        id: f.id,
+        id: festgeldId,
         bankName: f.bankName,
         amount: f.amount,
         interestRate: f.interestRate,
@@ -504,10 +573,19 @@ class _FestgeldSheetState extends ConsumerState<_FestgeldSheet> {
         createdAt: f.createdAt,
       );
 
-      if (_isEdit) {
-        await repo.update(fWithIds);
-      } else {
-        await repo.add(fWithIds);
+      // Always update — for new entries this writes the notifIds back;
+      // for edits this overwrites with fresh schedule.
+      await repo.update(fWithIds);
+
+      // For new entries, ask about calendar BEFORE closing the sheet
+      // so the context is still valid when the intent fires.
+      if (!_isEdit && mounted) {
+        await _promptCalendarEntry(
+          bankName: fWithIds.bankName,
+          amount: fWithIds.amount,
+          projectedPayout: fWithIds.projectedPayout,
+          endDate: fWithIds.endDate,
+        );
       }
 
       if (mounted) Navigator.pop(context);

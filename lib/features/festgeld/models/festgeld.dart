@@ -34,7 +34,12 @@ class Festgeld {
 
   double get progress => NumberUtils.calcFestgeldProgress(startDate, endDate);
 
-  int get daysRemaining => endDate.difference(DateTime.now()).inDays;
+  int get daysRemaining {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
+    return endDateOnly.difference(todayDate).inDays;
+  }
 
   factory Festgeld.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;

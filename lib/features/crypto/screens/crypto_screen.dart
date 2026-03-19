@@ -271,8 +271,10 @@ class _CryptoCard extends ConsumerWidget {
                   children: [
                     Text(
                       CurrencyFormatter.format(position.currentValue),
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.darkPositive,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Row(

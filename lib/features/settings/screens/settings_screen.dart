@@ -103,9 +103,7 @@ class SettingsScreen extends ConsumerWidget {
                                     color: AppColors.darkPositive)
                                 : const Icon(Icons.cancel_outlined,
                                     color: AppColors.darkSecondary),
-                            onTap: notifEnabled
-                                ? () => NotificationService.instance.showTestNotification()
-                                : null,
+                            onTap: null,
                           ),
                           if (!notifEnabled) ...[
                             Divider(height: 1, color: Theme.of(context).colorScheme.outline),

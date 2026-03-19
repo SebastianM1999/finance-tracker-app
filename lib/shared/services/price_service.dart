@@ -7,6 +7,19 @@ class PriceResult {
   final String source;
 }
 
+class YahooSearchResult {
+  const YahooSearchResult({
+    required this.symbol,
+    required this.name,
+    required this.type,
+    required this.exchange,
+  });
+  final String symbol;
+  final String name;
+  final String type; // 'ETF' or 'Aktie'
+  final String exchange;
+}
+
 class PriceService {
   PriceService._();
 
@@ -15,6 +28,9 @@ class PriceService {
       'https://api.frankfurter.app/latest?from=USD&to=EUR';
   static const _yahooBase =
       'https://query1.finance.yahoo.com/v8/finance/chart';
+  static const _yahoo2Base =
+      'https://query2.finance.yahoo.com/v8/finance/chart';
+  static const _stooqBase = 'https://stooq.com/q/l/';
   static const _stockpricesBase = 'https://stockprices.dev/api';
 
   // ── Crypto (Binance — CORS-safe) ──────────────────────────────────────────
@@ -84,28 +100,85 @@ class PriceService {
   }) async {
     if (ticker.trim().isEmpty) return null;
 
-    // ── 1. Yahoo Finance with full ticker (e.g. EIMI.DE) ────────────────────
-    final yahoo = await _yahooPrice(ticker);
+    // ── 1. Yahoo Finance query1 with full ticker (e.g. IS3N.DE) ─────────────
+    final yahoo = await _yahooPrice(ticker, base: _yahooBase);
     if (yahoo != null) return yahoo;
 
-    // ── 2. Yahoo Finance with base ticker only (e.g. EIMI) ──────────────────
-    // Helps when an exchange suffix is unrecognised by Yahoo but the base
-    // ticker resolves to another listing (e.g. EIMI → EIMI.L on Yahoo).
+    // ── 2. Yahoo Finance query2 (alternative server, same API) ──────────────
+    final yahoo2 = await _yahooPrice(ticker, base: _yahoo2Base);
+    if (yahoo2 != null) return yahoo2;
+
+    // ── 3. Stooq (reliable for XETRA .DE and Euronext .AS, no key needed) ──
+    final stooq = await _stooqPrice(ticker);
+    if (stooq != null) return stooq;
+
+    // ── 4. Yahoo Finance base ticker only (e.g. IS3N strips to base) ────────
     final base = _cleanTicker(ticker);
     if (base != ticker.trim().toUpperCase()) {
-      final yahooBase = await _yahooPrice(base);
+      final yahooBase = await _yahooPrice(base, base: _yahooBase);
       if (yahooBase != null) return yahooBase;
     }
 
-    // ── 3. stockprices.dev fallback (CORS-safe, US tickers only) ───────────
+    // ── 5. stockprices.dev fallback (CORS-safe, US tickers only) ────────────
     return _stockpricesPrice(base, isEtf: isEtf);
   }
 
-  static Future<PriceResult?> _yahooPrice(String ticker) async {
+  /// Converts a Yahoo-style ticker to a Stooq ticker and fetches the price.
+  /// Handles: XETRA (.DE → .de), Euronext (.AS → .as), LSE (.L → .uk),
+  /// US stocks (no suffix → .us). Returns EUR price.
+  static Future<PriceResult?> _stooqPrice(String ticker) async {
+    try {
+      final t = ticker.trim().toUpperCase();
+      final String stooqTicker;
+      final bool isEur;
+
+      if (t.endsWith('.DE')) {
+        stooqTicker = t.toLowerCase();
+        isEur = true;
+      } else if (t.endsWith('.AS') || t.endsWith('.PA')) {
+        stooqTicker = t.toLowerCase();
+        isEur = true;
+      } else if (t.endsWith('.L')) {
+        // LSE prices from Stooq are in GBp (pence), skip — Yahoo handles these
+        return null;
+      } else {
+        // US ticker (no suffix or explicit .US)
+        final base = t.endsWith('.US') ? t : '$t.US';
+        stooqTicker = base.toLowerCase();
+        isEur = false;
+      }
+
+      final uri = Uri.parse(
+          '$_stooqBase?s=$stooqTicker&f=sd2t2ohlcv&h&e=csv');
+      final res = await http.get(uri, headers: {
+        'User-Agent': 'Mozilla/5.0',
+      }).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return null;
+
+      final lines = res.body.trim().split('\n');
+      if (lines.length < 2) return null;
+      final cols = lines[1].split(',');
+      if (cols.length < 7) return null;
+
+      final close = double.tryParse(cols[6].trim());
+      if (close == null || close <= 0) return null;
+
+      if (isEur) return PriceResult(price: close, source: 'Stooq');
+
+      final rate = await _usdToEur();
+      if (rate == null) return null;
+      return PriceResult(price: close * rate, source: 'Stooq');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<PriceResult?> _yahooPrice(String ticker,
+      {String base = _yahooBase}) async {
     try {
       // Do NOT use Uri.encodeComponent here — it encodes '=' as '%3D' which
       // breaks futures tickers like GC=F on the Yahoo Finance API.
-      final uri = Uri.parse('$_yahooBase/$ticker?interval=1d&range=1d');
+      final uri = Uri.parse('$base/$ticker?interval=1d&range=1d');
       final res = await http.get(uri, headers: {
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0',
@@ -156,6 +229,47 @@ class PriceService {
       return PriceResult(price: usdPrice * rate, source: 'stockprices.dev');
     } catch (_) {
       return null;
+    }
+  }
+
+  // ── Yahoo Finance search ──────────────────────────────────────────────────
+
+  static const _yahooSearchBase =
+      'https://query1.finance.yahoo.com/v1/finance/search';
+
+  static Future<List<YahooSearchResult>> searchAssets(String query) async {
+    if (query.trim().isEmpty) return [];
+    try {
+      final encoded = Uri.encodeComponent(query.trim());
+      final uri = Uri.parse(
+        '$_yahooSearchBase?q=$encoded&lang=en-US&region=DE'
+        '&quotesCount=15&newsCount=0&enableFuzzyQuery=false',
+      );
+      final res = await http.get(uri, headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Accept': 'application/json',
+      }).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return [];
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final quotes = (data['quotes'] as List?) ?? [];
+      return quotes
+          .whereType<Map<String, dynamic>>()
+          .where((q) =>
+              q['quoteType'] == 'ETF' || q['quoteType'] == 'EQUITY')
+          .map((q) => YahooSearchResult(
+                symbol: (q['symbol'] as String? ?? '').trim(),
+                name: (q['shortname'] ?? q['longname'] ?? q['symbol'])
+                        as String? ??
+                    '',
+                type: q['quoteType'] == 'ETF' ? 'ETF' : 'Aktie',
+                exchange: (q['exchDisp'] ?? q['exchange'] ?? '') as String? ??
+                    '',
+              ))
+          .where((r) => r.symbol.isNotEmpty && r.name.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return [];
     }
   }
 

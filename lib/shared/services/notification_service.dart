@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -20,6 +21,8 @@ class NotificationService {
     if (kIsWeb || _initialized) return;
 
     tz.initializeTimeZones();
+    final localTz = await FlutterTimezone.getLocalTimezone();
+    tz.setLocalLocation(tz.getLocation(localTz));
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
@@ -48,7 +51,7 @@ class NotificationService {
       _channelId,
       _channelName,
       description: 'Erinnerungen zu Festgeld-Fälligkeiten',
-      importance: Importance.high,
+      importance: Importance.max,
     );
     await _plugin
         .resolvePlatformSpecificImplementation<
@@ -92,8 +95,9 @@ class NotificationService {
             android: AndroidNotificationDetails(
               _channelId,
               _channelName,
-              importance: Importance.high,
-              priority: Priority.high,
+              importance: Importance.max,
+              priority: Priority.max,
+              category: AndroidNotificationCategory.alarm,
             ),
             iOS: const DarwinNotificationDetails(),
           ),
@@ -106,25 +110,6 @@ class NotificationService {
     }
 
     return scheduledIds;
-  }
-
-  /// Show an immediate test notification.
-  Future<void> showTestNotification() async {
-    if (kIsWeb) return;
-    await _plugin.show(
-      888888,
-      '🔔 Festgeld-Erinnerung Test',
-      'Push-Benachrichtigungen funktionieren!',
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: const DarwinNotificationDetails(),
-      ),
-    );
   }
 
   /// Returns true if the user has notifications enabled for this app.
@@ -169,9 +154,6 @@ class NotificationService {
   String _fmt(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
 
-  tz.TZDateTime _toTZDateTime(DateTime dt) {
-    // Use millisecondsSinceEpoch to avoid tz.local defaulting to UTC
-    // when setLocalLocation() was never called.
-    return tz.TZDateTime.fromMillisecondsSinceEpoch(tz.UTC, dt.millisecondsSinceEpoch);
-  }
+  tz.TZDateTime _toTZDateTime(DateTime dt) =>
+      tz.TZDateTime.from(dt, tz.local);
 }
