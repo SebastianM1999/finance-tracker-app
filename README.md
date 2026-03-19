@@ -8,7 +8,9 @@ A mobile-first personal finance app built with Flutter & Firebase.
 
 - Track checking accounts, fixed deposits, ETFs, crypto, physical assets & debts
 - Net worth history with interactive chart
-- Push notifications for fixed deposit maturity dates (Android)
+- Push notifications for fixed deposit maturity dates (30, 7, 1 day before & on due date)
+- Calendar integration — add due dates directly to your calendar app
+- Biometric-ready notification icon (white F silhouette)
 - Dark & Light Mode
 - Google Sign-In
 

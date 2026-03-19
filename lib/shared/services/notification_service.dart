@@ -24,7 +24,7 @@ class NotificationService {
     final localTz = await FlutterTimezone.getLocalTimezone();
     tz.setLocalLocation(tz.getLocation(localTz));
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -98,6 +98,7 @@ class NotificationService {
               importance: Importance.max,
               priority: Priority.max,
               category: AndroidNotificationCategory.alarm,
+              largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
             ),
             iOS: const DarwinNotificationDetails(),
           ),
@@ -110,6 +111,27 @@ class NotificationService {
     }
 
     return scheduledIds;
+  }
+
+  /// Show an immediate test notification.
+  Future<void> showTestNotification() async {
+    if (kIsWeb) return;
+    final notifEnabled = await areNotificationsEnabled();
+    if (!notifEnabled) return;
+    await _plugin.show(
+      888888,
+      '🔔 Test-Erinnerung',
+      'Benachrichtigungen funktionieren!',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId, _channelName,
+          importance: Importance.max,
+          priority: Priority.max,
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+    );
   }
 
   /// Returns true if the user has notifications enabled for this app.
