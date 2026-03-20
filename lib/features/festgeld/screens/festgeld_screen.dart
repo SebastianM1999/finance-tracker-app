@@ -1,4 +1,5 @@
 import 'package:add_2_calendar/add_2_calendar.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -447,6 +448,7 @@ class _FestgeldSheetState extends ConsumerState<_FestgeldSheet> {
     required double projectedPayout,
     required DateTime endDate,
   }) async {
+    if (kIsWeb) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

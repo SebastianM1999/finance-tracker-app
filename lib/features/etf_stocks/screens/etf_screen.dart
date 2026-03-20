@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../../../shared/data/known_assets.dart';
 import '../../../shared/services/price_service.dart';
 import '../../../shared/widgets/asset_search_sheet.dart';
@@ -316,6 +317,11 @@ class _EtfCard extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    if (position.lastPriceUpdate != null)
+                      Text(
+                        DateFormatter.priceAge(position.lastPriceUpdate),
+                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                      ),
                   ],
                 ),
               ],

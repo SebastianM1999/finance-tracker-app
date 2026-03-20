@@ -20,4 +20,14 @@ class DateFormatter {
 
   static int daysRemainingInt(DateTime endDate) =>
       endDate.difference(DateTime.now()).inDays;
+
+  /// Returns a human-readable "price age" string, e.g. "vor 3 Min." or "vor 2 Std."
+  static String priceAge(DateTime? lastUpdate) {
+    if (lastUpdate == null) return '';
+    final diff = DateTime.now().difference(lastUpdate);
+    if (diff.inSeconds < 60) return 'gerade eben';
+    if (diff.inMinutes < 60) return 'vor ${diff.inMinutes} Min.';
+    if (diff.inHours < 24) return 'vor ${diff.inHours} Std.';
+    return 'vor ${diff.inDays} ${diff.inDays == 1 ? 'Tag' : 'Tagen'}';
+  }
 }

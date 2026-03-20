@@ -1,0 +1,11 @@
+{
+  "name": "fintrack-functions",
+  "description": "Price proxy Cloud Functions for FinTrack",
+  "engines": { "node": "22" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-functions": "^6.0.0",
+    "axios": "^1.6.0"
+  },
+  "private": true
+}

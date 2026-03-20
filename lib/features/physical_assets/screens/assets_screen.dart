@@ -5,6 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../../../shared/services/price_service.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/currency_input_field.dart';
@@ -329,6 +330,11 @@ class _AssetCard extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    if (asset.lastPriceUpdate != null)
+                      Text(
+                        DateFormatter.priceAge(asset.lastPriceUpdate),
+                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                      ),
                   ],
                 ),
               ],

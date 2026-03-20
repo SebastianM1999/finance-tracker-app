@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class PriceResult {
@@ -22,6 +23,9 @@ class YahooSearchResult {
 
 class PriceService {
   PriceService._();
+
+  static const _proxyBase =
+      'https://us-central1-fintrack-a459c.cloudfunctions.net/fetchPrice';
 
   static const _binanceBase = 'https://api.binance.com/api/v3/ticker/price';
   static const _frankfurterUrl =
@@ -49,9 +53,69 @@ class PriceService {
         trimmed.toUpperCase();
   }
 
+  static Future<PriceResult?> _proxyFetch(Map<String, String> params) async {
+    try {
+      final uri = Uri.parse(_proxyBase).replace(queryParameters: params);
+      final res = await http.get(uri).timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return null;
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final price = (data['price'] as num?)?.toDouble();
+      final source = data['source'] as String? ?? 'Cloud Function';
+      if (price == null) return null;
+      return PriceResult(price: price, source: source);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Fetches prices for multiple tickers in a single Cloud Function call.
+  /// Only used on web. Returns a map of ticker → price (EUR).
+  static Future<Map<String, double>> fetchBatchPrices(
+      Map<String, bool> tickers) async {
+    if (tickers.isEmpty) return {};
+    try {
+      final tickersParam = tickers.entries
+          .map((e) => '${e.key}:${e.value ? 'etf' : 'stock'}')
+          .join(',');
+      final uri = Uri.parse(_proxyBase)
+          .replace(queryParameters: {'type': 'batch', 'tickers': tickersParam});
+      final res = await http.get(uri).timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) return {};
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final prices = data['prices'] as Map<String, dynamic>? ?? {};
+      return prices.map((k, v) => MapEntry(k, (v as num).toDouble()));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<List<YahooSearchResult>> _proxySearch(String query) async {
+    try {
+      final uri = Uri.parse(_proxyBase)
+          .replace(queryParameters: {'type': 'search', 'q': query.trim()});
+      final res = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return [];
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final results = (data['results'] as List?) ?? [];
+      return results
+          .whereType<Map<String, dynamic>>()
+          .map((q) => YahooSearchResult(
+                symbol: q['symbol'] as String? ?? '',
+                name: q['name'] as String? ?? '',
+                type: q['type'] as String? ?? 'Aktie',
+                exchange: q['exchange'] as String? ?? '',
+              ))
+          .where((r) => r.symbol.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   static Future<PriceResult?> fetchCryptoPrice(
       String coinSymbol, String coinName) async {
     final symbol = _normalizeSymbol(coinSymbol);
+    if (kIsWeb) return _proxyFetch({'type': 'crypto', 'symbol': symbol});
 
     final eurPrice = await _binancePrice('${symbol}EUR');
     if (eurPrice != null) {
@@ -91,14 +155,25 @@ class PriceService {
   /// 2. Fall back to stockprices.dev (CORS-safe, USD only, US securities only).
   /// Fetches commodity spot price via Yahoo Finance (e.g. GC=F for Gold).
   /// Returns EUR price per unit (troy oz for metals, barrel for oil).
-  static Future<PriceResult?> fetchCommodityPrice(String yahooTicker) =>
-      _yahooPrice(yahooTicker);
+  static Future<PriceResult?> fetchCommodityPrice(String yahooTicker) {
+    if (kIsWeb) {
+      return _proxyFetch({'type': 'commodity', 'ticker': yahooTicker});
+    }
+    return _yahooPrice(yahooTicker);
+  }
 
   static Future<PriceResult?> fetchStockOrEtfPrice(
     String ticker, {
     required bool isEtf,
   }) async {
     if (ticker.trim().isEmpty) return null;
+    if (kIsWeb) {
+      return _proxyFetch({
+        'type': isEtf ? 'etf' : 'stock',
+        'ticker': ticker,
+        'isEtf': isEtf.toString(),
+      });
+    }
 
     // ── 1. Yahoo Finance query1 with full ticker (e.g. IS3N.DE) ─────────────
     final yahoo = await _yahooPrice(ticker, base: _yahooBase);
@@ -239,6 +314,7 @@ class PriceService {
 
   static Future<List<YahooSearchResult>> searchAssets(String query) async {
     if (query.trim().isEmpty) return [];
+    if (kIsWeb) return _proxySearch(query);
     try {
       final encoded = Uri.encodeComponent(query.trim());
       final uri = Uri.parse(

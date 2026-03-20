@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -93,6 +94,9 @@ class _EtfSearchSheetState extends State<_EtfSearchSheet> {
   String _query = '';
   List<YahooSearchResult> _results = [];
   bool _loading = false;
+  // Web: batch-fetched prices (ticker → EUR price)
+  Map<String, double> _webPrices = {};
+  bool _pricesLoading = false;
 
   @override
   void initState() {
@@ -117,10 +121,10 @@ class _EtfSearchSheetState extends State<_EtfSearchSheet> {
     _savedQuery = v.trim();
     setState(() => _query = v.trim());
     if (v.trim().isEmpty) {
-      setState(() { _results = []; _loading = false; });
+      setState(() { _results = []; _loading = false; _webPrices = {}; });
       return;
     }
-    setState(() => _loading = true);
+    setState(() { _loading = true; _webPrices = {}; });
     _debounce = Timer(const Duration(milliseconds: 400), () => _runSearch(v.trim()));
   }
 
@@ -129,7 +133,17 @@ class _EtfSearchSheetState extends State<_EtfSearchSheet> {
     final yahoo = await PriceService.searchAssets(q);
     final localSymbols = local.map((e) => e.symbol.toUpperCase()).toSet();
     final extra = yahoo.where((e) => !localSymbols.contains(e.symbol.toUpperCase())).toList();
-    if (mounted) setState(() { _results = [...local, ...extra]; _loading = false; });
+    final combined = [...local, ...extra];
+    if (!mounted) return;
+    setState(() { _results = combined; _loading = false; });
+
+    // On web, fetch all prices in one batch request instead of individually
+    if (kIsWeb && combined.isNotEmpty) {
+      if (mounted) setState(() => _pricesLoading = true);
+      final tickerMap = {for (final r in combined) r.symbol: r.type == 'ETF'};
+      final prices = await PriceService.fetchBatchPrices(tickerMap);
+      if (mounted) setState(() { _webPrices = prices; _pricesLoading = false; });
+    }
   }
 
   /// Fuzzy-match against the static known list.
@@ -189,6 +203,27 @@ class _EtfSearchSheetState extends State<_EtfSearchSheet> {
         }
         final r = _results[i];
         final isEtf = r.type == 'ETF';
+        Widget? priceWidget;
+        if (kIsWeb) {
+          final p = _webPrices[r.symbol];
+          if (_pricesLoading && p == null) {
+            priceWidget = const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 1.5),
+            );
+          } else if (p != null) {
+            priceWidget = Text(
+              '${p.toStringAsFixed(2)}€',
+              style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.darkPositive,
+                  ),
+            );
+          }
+        } else {
+          priceWidget = _LivePrice(ticker: r.symbol, isEtf: isEtf);
+        }
         return _AssetTile(
           leading: _SymbolBadge(
             label: isEtf ? 'ETF' : '📈',
@@ -196,7 +231,7 @@ class _EtfSearchSheetState extends State<_EtfSearchSheet> {
           ),
           title: r.name,
           subtitle: r.symbol,
-          trailing: _LivePrice(ticker: r.symbol, isEtf: isEtf),
+          trailing: priceWidget,
           onTap: () => Navigator.pop(
             ctx,
             KnownEtf(r.name, r.symbol, r.type, r.exchange),

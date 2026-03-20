@@ -44,6 +44,7 @@ class PriceRefreshService {
           currentPrice: result.price,
           notes: pos.notes,
           createdAt: pos.createdAt,
+          lastPriceUpdate: DateTime.now(),
         ));
         updated++;
       }
@@ -91,6 +92,7 @@ class PriceRefreshService {
         currentValue: newValue,
         notes: asset.notes,
         createdAt: asset.createdAt,
+        lastPriceUpdate: DateTime.now(),
       ));
       updated++;
     }

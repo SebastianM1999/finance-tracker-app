@@ -11,6 +11,7 @@ class CryptoPosition {
     required this.currentPrice,
     this.notes,
     required this.createdAt,
+    this.lastPriceUpdate,
   });
 
   final String id;
@@ -22,6 +23,7 @@ class CryptoPosition {
   final double currentPrice;
   final String? notes;
   final DateTime createdAt;
+  final DateTime? lastPriceUpdate;
 
   double get currentValue => amount * currentPrice;
   double get buyValue => amount * buyPrice;
@@ -40,6 +42,9 @@ class CryptoPosition {
       currentPrice: (d['currentPrice'] as num).toDouble(),
       notes: d['notes'] as String?,
       createdAt: (d['createdAt'] as Timestamp).toDate(),
+      lastPriceUpdate: d['lastPriceUpdate'] != null
+          ? (d['lastPriceUpdate'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -52,5 +57,8 @@ class CryptoPosition {
         'currentPrice': currentPrice,
         'notes': notes,
         'createdAt': Timestamp.fromDate(createdAt),
+        'lastPriceUpdate': lastPriceUpdate != null
+            ? Timestamp.fromDate(lastPriceUpdate!)
+            : null,
       };
 }
