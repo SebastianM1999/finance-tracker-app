@@ -16,6 +16,9 @@ jobs:
           flutter-version: '3.x'
           channel: stable
 
+      - name: Analyze
+        run: flutter analyze
+
       - name: Build web
         run: flutter build web --release
 
