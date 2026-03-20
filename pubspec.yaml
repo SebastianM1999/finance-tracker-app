@@ -49,6 +49,9 @@ dependencies:
   web: ^1.1.1
   shimmer: ^3.0.0
 
+  # Internationalization
+  intl: any
+
   # HTTP client
   http: ^1.2.2
 
