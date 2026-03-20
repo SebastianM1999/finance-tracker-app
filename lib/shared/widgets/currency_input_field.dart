@@ -8,12 +8,14 @@ class CurrencyInputField extends StatefulWidget {
     this.initialValue,
     required this.onChanged,
     this.suffix = '€',
+    this.loading = false,
   });
 
   final String label;
   final double? initialValue;
   final ValueChanged<double> onChanged;
   final String suffix;
+  final bool loading;
 
   @override
   State<CurrencyInputField> createState() => _CurrencyInputFieldState();
@@ -63,8 +65,19 @@ class _CurrencyInputFieldState extends State<CurrencyInputField> {
       ],
       decoration: InputDecoration(
         labelText: widget.label,
-        suffixText: widget.suffix,
+        suffixText: widget.loading ? null : widget.suffix,
+        suffixIcon: widget.loading
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : null,
       ),
+      readOnly: widget.loading,
       validator: (v) {
         if (v == null || v.isEmpty) return 'Pflichtfeld';
         final parsed = double.tryParse(v.replaceAll(',', '.'));

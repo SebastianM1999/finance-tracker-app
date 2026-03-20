@@ -289,7 +289,7 @@ class _AssetCard extends ConsumerWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                       Text(
-                        '${asset.assetType}${asset.weightPerUnit != null ? ' · ${asset.weightPerUnit}g/Stk' : ''} · ${asset.quantity}x',
+                        '${asset.assetType}${asset.weightPerUnit != null ? ' · ${asset.weightPerUnit}g/Stk' : ''} · ${asset.quantity.toStringAsFixed(2)}x',
                         style: theme.textTheme.bodyMedium,
                       ),
                     ],
@@ -397,13 +397,15 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
   late final TextEditingController _notes;
 
   double _buyPrice = 0;
+  double _buyPricePerOz = 0; // oz mode: buy price per troy oz
   double _currentValue = 0;
   String _assetType = 'Gold';
   bool _saving = false;
 
   // EUR mode (metals)
   bool _useEurMode = true;
-  double _eurAmount = 0;
+  double _eurAmount = 0;     // current value in EUR (used to derive oz count)
+  double _eurKaufbetrag = 0; // what the user originally paid
   double _spotPrice = 0;
   bool _fetchingPrice = false;
 
@@ -423,6 +425,9 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
         text: a != null ? a.quantity.toStringAsFixed(4) : '');
     _notes = TextEditingController(text: a?.notes ?? '');
     _buyPrice = a?.buyPrice ?? 0;
+    _eurKaufbetrag = a?.buyPrice ?? 0;
+    // In edit mode, derive per-oz price from total / quantity
+    _buyPricePerOz = (a != null && a.quantity > 0) ? a.buyPrice / a.quantity : 0;
     _currentValue = a?.currentValue ?? 0;
     _assetType = a?.assetType ?? 'Gold';
     // Edit mode: default to oz mode so the user sees stored values
@@ -449,7 +454,11 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
     if (!mounted) return;
     setState(() {
       _fetchingPrice = false;
-      if (result != null) _spotPrice = result.price;
+      if (result != null) {
+        _spotPrice = result.price;
+        if (_buyPricePerOz == 0) _buyPricePerOz = result.price;
+        if (_eurAmount == 0) _eurAmount = result.price;
+      }
     });
   }
 
@@ -466,13 +475,13 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
 
       if (_isMetal) {
         if (_useEurMode) {
-          final price = _spotPrice > 0 ? _spotPrice : 1.0;
-          qty = _eurAmount / price;
-          buyPriceTotal = _eurAmount;
-          currentVal = _eurAmount;
+          final kaufkurs = _buyPricePerOz > 0 ? _buyPricePerOz : (_spotPrice > 0 ? _spotPrice : 1.0);
+          qty = _eurKaufbetrag > 0 ? _eurKaufbetrag / kaufkurs : 1.0;
+          buyPriceTotal = _eurKaufbetrag > 0 ? _eurKaufbetrag : (_spotPrice * qty);
+          currentVal = _spotPrice > 0 ? _spotPrice * qty : buyPriceTotal;
         } else {
           qty = double.tryParse(_ozQty.text.trim().replaceAll(',', '.')) ?? 1.0;
-          buyPriceTotal = _buyPrice;
+          buyPriceTotal = _buyPricePerOz > 0 ? _buyPricePerOz * qty : _buyPrice;
           currentVal = _spotPrice > 0 ? _spotPrice * qty : _currentValue;
         }
       } else {
@@ -584,25 +593,27 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
                 const SizedBox(height: 12),
 
                 if (_useEurMode) ...[
-                  CurrencyInputField(
-                    label: 'Investierter Betrag',
-                    initialValue: _eurAmount > 0 ? _eurAmount : null,
-                    onChanged: (v) => setState(() => _eurAmount = v),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CurrencyInputField(
+                          label: 'Kaufbetrag (€)',
+                          initialValue: _eurKaufbetrag > 0 ? _eurKaufbetrag : null,
+                          onChanged: (v) => setState(() => _eurKaufbetrag = v),
+                          loading: _fetchingPrice,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: CurrencyInputField(
+                          label: 'Kaufkurs/oz',
+                          initialValue: _buyPricePerOz > 0 ? _buyPricePerOz : null,
+                          onChanged: (v) => setState(() => _buyPricePerOz = v),
+                          loading: _fetchingPrice,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 6),
-                  if (_fetchingPrice)
-                    Text('Live-Preis wird geladen...',
-                        style: theme.textTheme.bodyMedium)
-                  else if (_spotPrice > 0 && _eurAmount > 0)
-                    Text(
-                      '≈ ${(_eurAmount / _spotPrice).toStringAsFixed(4)} oz  ·  Kurs: ${CurrencyFormatter.format(_spotPrice)}/oz',
-                      style: theme.textTheme.bodyMedium,
-                    )
-                  else if (_spotPrice > 0)
-                    Text(
-                      'Aktueller Kurs: ${CurrencyFormatter.format(_spotPrice)}/oz',
-                      style: theme.textTheme.bodyMedium,
-                    ),
                 ] else ...[
                   Row(
                     children: [
@@ -624,20 +635,155 @@ class _AssetSheetState extends ConsumerState<_AssetSheet> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: CurrencyInputField(
-                          label: 'Kaufpreis gesamt',
-                          initialValue: _buyPrice > 0 ? _buyPrice : null,
-                          onChanged: (v) => setState(() => _buyPrice = v),
+                          label: 'Kaufkurs/oz',
+                          initialValue: _buyPricePerOz > 0 ? _buyPricePerOz : null,
+                          onChanged: (v) => setState(() => _buyPricePerOz = v),
+                          loading: _fetchingPrice,
                         ),
                       ),
                     ],
                   ),
-                  if (_spotPrice > 0) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Aktueller Kurs: ${CurrencyFormatter.format(_spotPrice)}/oz',
-                      style: theme.textTheme.bodyMedium,
+                ],
+                const SizedBox(height: 12),
+
+                // ── Price display (ETF-style) ───────────────────────────────
+                if (_fetchingPrice)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Live-Preis wird geladen...',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.6)),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (_spotPrice > 0) ...[
+                  () {
+                    final qty = _useEurMode
+                        ? (_buyPricePerOz > 0 ? _eurKaufbetrag / _buyPricePerOz : 0)
+                        : (double.tryParse(_ozQty.text.trim().replaceAll(',', '.')) ?? 0);
+                    final currentVal = _spotPrice * qty;
+                    final buy = _useEurMode
+                        ? _eurKaufbetrag
+                        : (_buyPricePerOz * qty);
+                    final pnl = buy > 0 ? currentVal - buy : null;
+                    final pnlPos = pnl == null || pnl >= 0;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Spot price row
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Aktueller Kurs',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.6))),
+                              Text(
+                                '${CurrencyFormatter.format(_spotPrice)}/oz',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Preview banner (only when amount/oz entered)
+                        if (currentVal > 0) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                  colors: AppColors.gradientPhysical),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Aktueller Wert',
+                                        style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12)),
+                                    Text(
+                                      CurrencyFormatter.format(currentVal),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    if (_useEurMode && qty > 0)
+                                      Text(
+                                        '≈ ${qty.toStringAsFixed(4)} oz  ·  Kauf: ${CurrencyFormatter.format(_eurKaufbetrag)}',
+                                        style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 11),
+                                      ),
+                                  ],
+                                ),
+                                if (pnl != null && buy > 0)
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      const Text('P&L',
+                                          style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 12)),
+                                      Text(
+                                        CurrencyFormatter.formatPnl(pnl),
+                                        style: TextStyle(
+                                          color: pnlPos
+                                              ? const Color(0xFFB8F5D8)
+                                              : const Color(0xFFFFB3B3),
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${pnlPos ? '+' : ''}${(pnl / buy * 100).toStringAsFixed(1)}%',
+                                        style: TextStyle(
+                                          color: pnlPos
+                                              ? const Color(0xFFB8F5D8)
+                                              : const Color(0xFFFFB3B3),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  }(),
                 ],
               ]
               // ── Non-metal inputs ───────────────────────────────────────────
