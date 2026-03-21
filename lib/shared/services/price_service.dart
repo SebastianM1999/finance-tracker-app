@@ -21,6 +21,14 @@ class YahooSearchResult {
   final String exchange;
 }
 
+class CoinGeckoResult {
+  const CoinGeckoResult({required this.id, required this.name, required this.symbol, this.imageUrl});
+  final String id; // CoinGecko coin id (e.g. "cronos", "bitcoin")
+  final String name;
+  final String symbol;
+  final String? imageUrl; // small thumbnail URL
+}
+
 class PriceService {
   PriceService._();
 
@@ -131,6 +139,60 @@ class PriceService {
     }
 
     return null;
+  }
+
+  /// Searches CoinGecko for coins matching [query]. Returns up to 20 results.
+  static Future<List<CoinGeckoResult>> searchCryptos(String query) async {
+    if (query.trim().isEmpty) return [];
+    try {
+      final uri = Uri.parse(
+        'https://api.coingecko.com/api/v3/search?query=${Uri.encodeComponent(query.trim())}',
+      );
+      final res = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return [];
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final coins = (data['coins'] as List?) ?? [];
+      return coins
+          .whereType<Map<String, dynamic>>()
+          .map((c) => CoinGeckoResult(
+                id: c['id'] as String? ?? '',
+                name: c['name'] as String? ?? '',
+                symbol: (c['symbol'] as String? ?? '').toUpperCase(),
+                imageUrl: c['large'] as String? ?? c['thumb'] as String?,
+              ))
+          .where((c) => c.id.isNotEmpty && c.name.isNotEmpty && c.symbol.isNotEmpty)
+          .take(20)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Batch-fetches EUR prices from CoinGecko by coin id (e.g. "bitcoin", "cronos").
+  /// Returns a map of id → EUR price.
+  static Future<Map<String, double>> fetchCoinGeckoPrices(List<String> ids) async {
+    if (ids.isEmpty) return {};
+    try {
+      final uri = Uri.parse(
+        'https://api.coingecko.com/api/v3/simple/price'
+        '?ids=${ids.join(',')}&vs_currencies=eur',
+      );
+      final res = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return {};
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final result = <String, double>{};
+      for (final entry in data.entries) {
+        final eur = ((entry.value as Map<String, dynamic>)['eur'] as num?)?.toDouble();
+        if (eur != null) result[entry.key] = eur;
+      }
+      return result;
+    } catch (_) {
+      return {};
+    }
   }
 
   static Future<double?> _binancePrice(String symbol) async {

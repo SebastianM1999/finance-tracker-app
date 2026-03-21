@@ -1,7 +1,8 @@
 class KnownCrypto {
   final String name;
   final String symbol;
-  const KnownCrypto(this.name, this.symbol);
+  final String? imageUrl;
+  const KnownCrypto(this.name, this.symbol, {this.imageUrl});
 }
 
 class KnownEtf {

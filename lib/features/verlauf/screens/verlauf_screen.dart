@@ -34,6 +34,11 @@ class VerlaufScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final days = ref.watch(_verlaufRangeProvider);
+    // Pre-subscribe all range variants so switching is instant (no loading flash)
+    ref.watch(netWorthRangeProvider(30));
+    ref.watch(netWorthRangeProvider(180));
+    ref.watch(netWorthRangeProvider(365));
+    ref.watch(netWorthRangeProvider(0));
     final historyAsync = ref.watch(netWorthRangeProvider(days));
 
     return Scaffold(
@@ -82,7 +87,13 @@ class _VerlaufBody extends ConsumerWidget {
               style: theme.textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          ...history.reversed.map((s) => _SnapshotTile(snapshot: s)),
+          ...() {
+            final reversed = history.reversed.toList();
+            return List.generate(reversed.length, (i) {
+              final prev = i + 1 < reversed.length ? reversed[i + 1] : null;
+              return _SnapshotTile(snapshot: reversed[i], previous: prev);
+            });
+          }(),
         ],
 
         if (history.isEmpty)
@@ -389,19 +400,30 @@ class _HistoryChartState extends State<_HistoryChart> {
 // ── Snapshot Tile (list item) ─────────────────────────────────────────────────
 
 class _SnapshotTile extends StatelessWidget {
-  const _SnapshotTile({required this.snapshot});
+  const _SnapshotTile({required this.snapshot, this.previous});
   final NetWorthSnapshot snapshot;
+  final NetWorthSnapshot? previous;
 
   static final _dateFmt = DateFormat('dd. MMMM yyyy', 'de_DE');
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final prev = previous;
+    final isUp = prev == null ? null : snapshot.totalNetWorth >= prev.totalNetWorth;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        leading: isUp == null
+            ? null
+            : Icon(
+                isUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                color: isUp ? AppColors.darkPositive : AppColors.darkSecondary,
+                size: 20,
+              ),
         title: Text(
           _dateFmt.format(snapshot.recordedAt),
           style: theme.textTheme.bodyMedium

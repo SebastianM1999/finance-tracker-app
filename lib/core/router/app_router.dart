@@ -1,3 +1,4 @@
+import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -40,15 +41,32 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: AppRoutes.login,
-        builder: (context, state) => const LoginScreen(),
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const LoginScreen(),
+          transitionDuration: const Duration(milliseconds: 350),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeScaleTransition(animation: animation, child: child),
+        ),
       ),
       GoRoute(
         path: AppRoutes.verlauf,
-        builder: (context, state) => const VerlaufScreen(),
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const VerlaufScreen(),
+          transitionDuration: const Duration(milliseconds: 280),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
       ),
-      StatefulShellRoute.indexedStack(
+      StatefulShellRoute(
         builder: (context, state, navigationShell) =>
             AppScaffold(navigationShell: navigationShell),
+        // Only mount the active tab — widgets rebuild on each visit so
+        // flutter_animate entrance animations replay every time.
+        // StreamProviders are NOT autoDispose, so cached data loads instantly.
+        navigatorContainerBuilder: (context, navigationShell, children) =>
+            children[navigationShell.currentIndex],
         branches: [
           StatefulShellBranch(
             routes: [

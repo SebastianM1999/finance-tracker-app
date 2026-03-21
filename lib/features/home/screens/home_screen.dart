@@ -12,6 +12,7 @@ import '../../../core/utils/date_formatter.dart';
 import '../../../shared/widgets/profile_image_stub.dart'
     if (dart.library.js_interop) '../../../shared/widgets/profile_image_web.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../festgeld/models/festgeld.dart';
 import '../../investments/screens/investments_screen.dart';
 import '../providers/home_providers.dart';
 
@@ -157,35 +158,50 @@ class _NetWorthHero extends ConsumerWidget {
             style: TextStyle(color: AppColors.darkTextSecondary, fontSize: 14),
           ),
           const SizedBox(height: 8),
-          Text(
-            CurrencyFormatter.format(netWorth),
-            style: const TextStyle(
-              color: AppColors.darkText,
-              fontSize: 36,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1,
-            ),
-          ).animate(key: ValueKey(netWorth)).fadeIn(duration: 300.ms),
+          Row(
+            children: [
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    CurrencyFormatter.format(netWorth),
+                    style: const TextStyle(
+                      color: AppColors.darkText,
+                      fontSize: 36,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1,
+                    ),
+                  ).animate(key: ValueKey(netWorth)).fadeIn(duration: 300.ms),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: (isPositive
+              Flexible(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: (isPositive
+                            ? AppColors.darkPositive
+                            : AppColors.darkSecondary)
+                        .withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${CurrencyFormatter.formatPnl(change.absolute)}  ${CurrencyFormatter.formatPercent(change.percent)}',
+                    style: TextStyle(
+                      color: isPositive
                           ? AppColors.darkPositive
-                          : AppColors.darkSecondary)
-                      .withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '${CurrencyFormatter.formatPnl(change.absolute)}  ${CurrencyFormatter.formatPercent(change.percent)}',
-                  style: TextStyle(
-                    color: isPositive
-                        ? AppColors.darkPositive
-                        : AppColors.darkSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                          : AppColors.darkSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
               ),
@@ -323,14 +339,24 @@ class _CategoryCards extends ConsumerWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w500)),
                     const SizedBox(height: 2),
-                    Text(
-                      CurrencyFormatter.format(amount.abs()),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              CurrencyFormatter.format(amount.abs()),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -492,43 +518,268 @@ class _OnboardingButton extends StatelessWidget {
   }
 }
 
-// ── Upcoming Festgeld Maturity Banner ─────────────────────────────────────────
+// ── Upcoming Festgeld Maturity Notifications ──────────────────────────────────
 
-class _UpcomingMaturityBanner extends ConsumerWidget {
+class _UpcomingMaturityBanner extends ConsumerStatefulWidget {
   const _UpcomingMaturityBanner();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final upcoming = ref.watch(upcomingMaturitiesProvider);
+  ConsumerState<_UpcomingMaturityBanner> createState() =>
+      _UpcomingMaturityBannerState();
+}
+
+class _UpcomingMaturityBannerState
+    extends ConsumerState<_UpcomingMaturityBanner>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = true;
+  late final AnimationController _chevronController;
+
+  @override
+  void initState() {
+    super.initState();
+    _chevronController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+      value: 1, // starts expanded
+    );
+  }
+
+  @override
+  void dispose() {
+    _chevronController.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() => _expanded = !_expanded);
+    if (_expanded) {
+      _chevronController.forward();
+    } else {
+      _chevronController.reverse();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Watch stream directly so deletions propagate immediately
+    final allItems = ref.watch(festgeldStreamProvider).valueOrNull ?? [];
+    final upcoming = (allItems.where((f) => f.daysRemaining < 8).toList()
+      ..sort((a, b) => a.endDate.compareTo(b.endDate)));
     if (upcoming.isEmpty) return const SizedBox.shrink();
 
-    final next = upcoming.first;
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.darkWarning.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.darkWarning.withValues(alpha: 0.4)),
-      ),
-      child: Row(
+      padding: const EdgeInsets.only(top: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.notifications_active_outlined,
-              color: AppColors.darkWarning, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '${next.bankName} – ${DateFormatter.daysRemaining(next.endDate)} (${CurrencyFormatter.format(next.projectedPayout)})',
-              style: const TextStyle(
-                  color: AppColors.darkWarning,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500),
+          // Tappable section header
+          GestureDetector(
+            onTap: _toggle,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                const Text(
+                  'Fälligkeiten',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkWarning.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${upcoming.length}',
+                    style: const TextStyle(
+                      color: AppColors.darkWarning,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                RotationTransition(
+                  turns: Tween(begin: 0.5, end: 0.0).animate(CurvedAnimation(
+                    parent: _chevronController,
+                    curve: Curves.easeInOut,
+                  )),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: AppColors.darkTextSecondary,
+                    size: 20,
+                  ),
+                ),
+              ],
             ),
+          ),
+          // Animated card list
+          AnimatedSize(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeInOut,
+            child: _expanded
+                ? Column(
+                    children: [
+                      const SizedBox(height: 10),
+                      ...upcoming.asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final f = entry.value;
+                        return _MaturityCard(item: f)
+                            .animate()
+                            .fadeIn(
+                                delay: Duration(milliseconds: i * 60),
+                                duration: 280.ms)
+                            .slideX(
+                                begin: -0.04,
+                                end: 0,
+                                delay: Duration(milliseconds: i * 60),
+                                duration: 280.ms);
+                      }),
+                    ],
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
-    ),
+    );
+  }
+}
+
+class _MaturityCard extends ConsumerWidget {
+  const _MaturityCard({required this.item});
+  final Festgeld item;
+
+
+  /// Mirrors _FestgeldCard._urgencyColor — null means "not urgent yet"
+  Color? _urgencyColor(bool isExpired, double progress) {
+    if (isExpired) return AppColors.darkSecondary;
+    if (progress >= 0.90) return const Color(0xFF4FC770);
+    if (progress >= 0.75) return AppColors.darkPositive;
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isExpired = item.daysRemaining < 0;
+    final urgency = _urgencyColor(isExpired, item.progress);
+    final borderColor = urgency ?? AppColors.darkPrimary;
+    final daysLabel = DateFormatter.daysRemaining(item.endDate);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: () {
+          ref.read(investmentsTabProvider.notifier).state = 0;
+          context.go(AppRoutes.investments);
+        },
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.darkSurface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor.withValues(alpha: 0.35)),
+            boxShadow: [
+              BoxShadow(
+                color: borderColor.withValues(alpha: 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Gradient pig icon — identical to Festgeld tab card
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: AppColors.gradientFestgeld,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.savings_outlined,
+                    color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 12),
+              // Bank name + amounts
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.bankName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Text(
+                          CurrencyFormatter.format(item.amount),
+                          style: const TextStyle(
+                            color: AppColors.darkTextSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const Text(' → ',
+                            style: TextStyle(
+                                color: AppColors.darkTextSecondary,
+                                fontSize: 12)),
+                        Text(
+                          CurrencyFormatter.format(item.projectedPayout),
+                          style: const TextStyle(
+                            color: AppColors.darkPositive,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Status badge — colored when urgent, plain text otherwise
+              if (urgency != null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: urgency.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    daysLabel,
+                    style: TextStyle(
+                      color: urgency,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  daysLabel,
+                  style: const TextStyle(
+                    color: AppColors.darkTextSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

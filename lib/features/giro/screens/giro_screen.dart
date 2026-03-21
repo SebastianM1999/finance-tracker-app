@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../shared/widgets/add_celebration.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
+import '../../../shared/widgets/glow_icon.dart';
 import '../../../shared/widgets/currency_input_field.dart';
 import '../../../shared/widgets/shimmer_loading.dart';
 import '../../home/providers/home_providers.dart';
@@ -28,7 +30,10 @@ class GiroScreen extends ConsumerWidget {
             ? const _EmptyState()
             : Column(
                 children: [
-                  _TotalBanner(total: total),
+                  _TotalBanner(total: total)
+                      .animate()
+                      .fadeIn(duration: 400.ms)
+                      .slideY(begin: -0.1, end: 0, duration: 400.ms),
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: () async =>
@@ -38,8 +43,18 @@ class GiroScreen extends ConsumerWidget {
                         itemCount: list.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: 12),
-                        itemBuilder: (ctx, i) =>
-                            _GiroCard(account: list[i]),
+                        itemBuilder: (ctx, i) => _GiroCard(account: list[i])
+                            .animate()
+                            .fadeIn(
+                              delay: Duration(milliseconds: i.clamp(0, 4) * 55),
+                              duration: 300.ms,
+                            )
+                            .slideX(
+                              begin: 0.08,
+                              end: 0,
+                              delay: Duration(milliseconds: i.clamp(0, 4) * 55),
+                              duration: 300.ms,
+                            ),
                       ),
                     ),
                   ),
@@ -82,21 +97,33 @@ class _TotalBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text('Gesamt', style: TextStyle(color: Colors.white, fontSize: 14)),
-          Text(
-            CurrencyFormatter.format(total),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
+          const Spacer(),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                CurrencyFormatter.format(total),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+List<Color> _iconGradient(int colorValue) {
+  final base = Color(colorValue);
+  final dark = HSLColor.fromColor(base).withLightness(0.35).toColor();
+  return [base, dark];
 }
 
 class _GiroCard extends ConsumerWidget {
@@ -130,24 +157,27 @@ class _GiroCard extends ConsumerWidget {
       child: Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          leading: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: AppColors.gradientGiro),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.account_balance_outlined, color: Colors.white, size: 20),
+          leading: GlowIcon(
+            icon: Icons.account_balance_outlined,
+            gradient: _iconGradient(account.colorValue),
+            size: 36,
           ),
           title: Text(account.bankName, style: theme.textTheme.titleMedium),
           subtitle: Text(account.accountLabel, style: theme.textTheme.bodyMedium),
-          trailing: Text(
-            CurrencyFormatter.format(account.balance),
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: account.balance >= 0
-                  ? AppColors.darkPositive
-                  : AppColors.darkSecondary,
-              fontWeight: FontWeight.w700,
+          trailing: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 130),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                CurrencyFormatter.format(account.balance),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: account.balance >= 0
+                      ? AppColors.darkPositive
+                      : AppColors.darkSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
           onTap: () => showModalBottomSheet(
@@ -200,6 +230,19 @@ class _GiroSheet extends ConsumerStatefulWidget {
   ConsumerState<_GiroSheet> createState() => _GiroSheetState();
 }
 
+const _kPresetColors = [
+  Color(0xFF5B8DEF), // Blue
+  Color(0xFF3DC98A), // Green
+  Color(0xFF20B2AA), // Teal
+  Color(0xFF9B59B6), // Purple
+  Color(0xFFE056A0), // Pink
+  Color(0xFFF39C12), // Orange
+  Color(0xFFE74C3C), // Red
+  Color(0xFF5C6BC0), // Indigo
+  Color(0xFFFF6B35), // Deep Orange
+  Color(0xFF00BCD4), // Cyan
+];
+
 class _GiroSheetState extends ConsumerState<_GiroSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _bank;
@@ -207,6 +250,7 @@ class _GiroSheetState extends ConsumerState<_GiroSheet> {
   late final TextEditingController _notes;
   double _balance = 0;
   bool _saving = false;
+  late int _colorValue;
 
   bool get _isEdit => widget.account != null;
 
@@ -218,6 +262,7 @@ class _GiroSheetState extends ConsumerState<_GiroSheet> {
     _label = TextEditingController(text: a?.accountLabel ?? '');
     _notes = TextEditingController(text: a?.notes ?? '');
     _balance = a?.balance ?? 0;
+    _colorValue = a?.colorValue ?? _kPresetColors.first.value;
   }
 
   @override
@@ -240,6 +285,7 @@ class _GiroSheetState extends ConsumerState<_GiroSheet> {
         accountLabel: _label.text.trim(),
         balance: _balance,
         notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+        colorValue: _colorValue,
         updatedAt: now,
         createdAt: widget.account?.createdAt ?? now,
       );
@@ -248,6 +294,9 @@ class _GiroSheetState extends ConsumerState<_GiroSheet> {
       } else {
         await repo.add(account);
       }
+      if (!mounted) return;
+      // ignore: use_build_context_synchronously
+      await showAddCelebration(context, AddCelebrationType.giro, isEdit: _isEdit);
       HapticFeedback.lightImpact();
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -273,7 +322,8 @@ class _GiroSheetState extends ConsumerState<_GiroSheet> {
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Form(
           key: _formKey,
-          child: Column(
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -316,6 +366,39 @@ class _GiroSheetState extends ConsumerState<_GiroSheet> {
                 decoration: const InputDecoration(labelText: 'Notizen (optional)'),
                 maxLines: 2,
               ),
+              const SizedBox(height: 16),
+              Text('Icon Farbe', style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              )),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: _kPresetColors.map((c) {
+                  final selected = _colorValue == c.value;
+                  return GestureDetector(
+                    onTap: () => setState(() => _colorValue = c.value),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: c,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected ? Colors.white : Colors.transparent,
+                          width: 2.5,
+                        ),
+                        boxShadow: selected
+                            ? [BoxShadow(color: c.withValues(alpha: 0.6), blurRadius: 8)]
+                            : null,
+                      ),
+                      child: selected
+                          ? const Icon(Icons.check, color: Colors.white, size: 16)
+                          : null,
+                    ),
+                  );
+                }).toList(),
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -340,6 +423,7 @@ class _GiroSheetState extends ConsumerState<_GiroSheet> {
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),

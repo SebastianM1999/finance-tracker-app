@@ -10,6 +10,7 @@ class GiroAccount {
     this.notes,
     required this.updatedAt,
     required this.createdAt,
+    this.colorValue = 0xFF5B8DEF, // default blue
   });
 
   final String id;
@@ -20,6 +21,7 @@ class GiroAccount {
   final String? notes;
   final DateTime updatedAt;
   final DateTime createdAt;
+  final int colorValue;
 
   factory GiroAccount.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
@@ -32,6 +34,7 @@ class GiroAccount {
       notes: d['notes'] as String?,
       updatedAt: (d['updatedAt'] as Timestamp).toDate(),
       createdAt: (d['createdAt'] as Timestamp).toDate(),
+      colorValue: d['colorValue'] as int? ?? 0xFF5B8DEF,
     );
   }
 
@@ -43,6 +46,7 @@ class GiroAccount {
         'notes': notes,
         'updatedAt': Timestamp.fromDate(updatedAt),
         'createdAt': Timestamp.fromDate(createdAt),
+        'colorValue': colorValue,
       };
 
   GiroAccount copyWith({
@@ -51,6 +55,7 @@ class GiroAccount {
     double? balance,
     String? currency,
     String? notes,
+    int? colorValue,
   }) =>
       GiroAccount(
         id: id,
@@ -59,6 +64,7 @@ class GiroAccount {
         balance: balance ?? this.balance,
         currency: currency ?? this.currency,
         notes: notes ?? this.notes,
+        colorValue: colorValue ?? this.colorValue,
         updatedAt: DateTime.now(),
         createdAt: createdAt,
       );

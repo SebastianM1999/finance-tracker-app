@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -8,6 +9,7 @@ import '../../../core/utils/date_formatter.dart';
 import '../../../shared/data/known_assets.dart';
 import '../../../shared/services/price_service.dart';
 import '../../../shared/widgets/asset_search_sheet.dart';
+import '../../../shared/widgets/add_celebration.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/currency_input_field.dart';
 import '../../../shared/widgets/shimmer_loading.dart';
@@ -75,10 +77,10 @@ class _EtfTabBodyState extends ConsumerState<EtfTabBody> {
             ? const _EmptyState()
             : Column(
                 children: [
-                  _TotalBanner(
-                    total: total,
-                    list: list,
-                  ),
+                  _TotalBanner(total: total, list: list)
+                      .animate()
+                      .fadeIn(duration: 400.ms)
+                      .slideY(begin: -0.1, end: 0, duration: 400.ms),
                   const _PullHint(),
                   Expanded(
                     child: RefreshIndicator(
@@ -88,8 +90,18 @@ class _EtfTabBodyState extends ConsumerState<EtfTabBody> {
                         itemCount: list.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: 12),
-                        itemBuilder: (ctx, i) =>
-                            _EtfCard(position: list[i]),
+                        itemBuilder: (ctx, i) => _EtfCard(position: list[i])
+                            .animate()
+                            .fadeIn(
+                              delay: Duration(milliseconds: i.clamp(0, 4) * 55),
+                              duration: 300.ms,
+                            )
+                            .slideX(
+                              begin: 0.08,
+                              end: 0,
+                              delay: Duration(milliseconds: i.clamp(0, 4) * 55),
+                              duration: 300.ms,
+                            ),
                       ),
                     ),
                   ),
@@ -170,35 +182,45 @@ class _TotalBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Aktueller Wert',
-                  style: TextStyle(color: Colors.white70, fontSize: 12)),
-              Text(
-                CurrencyFormatter.format(total),
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Aktueller Wert',
+                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    CurrencyFormatter.format(total),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               const Text('Gesamt P&L',
                   style: TextStyle(color: Colors.white70, fontSize: 12)),
-              Text(
-                CurrencyFormatter.formatPnl(pnl),
-                style: TextStyle(
-                  color: pnlPos
-                      ? const Color(0xFFB8F5D8)
-                      : const Color(0xFFFFB3B3),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  CurrencyFormatter.formatPnl(pnl),
+                  style: TextStyle(
+                    color: pnlPos
+                        ? const Color(0xFFB8F5D8)
+                        : const Color(0xFFFFB3B3),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -261,8 +283,12 @@ class _EtfCard extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _TickerBadge(ticker: tickerDisplay, gradient: gradient),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: _TickerBadge(ticker: tickerDisplay, gradient: gradient),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -270,13 +296,8 @@ class _EtfCard extends ConsumerWidget {
                     children: [
                       Text(position.name,
                           style: theme.textTheme.titleMedium,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis),
-                      if (position.ticker != null)
-                        Text(
-                          position.ticker!,
-                          style: theme.textTheme.bodyMedium,
-                        ),
                       Text(
                         '${position.shares} Anteile · Ø ${CurrencyFormatter.format(position.buyPrice)}',
                         style: theme.textTheme.bodySmall,
@@ -284,45 +305,55 @@ class _EtfCard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      CurrencyFormatter.format(position.currentValue),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.darkPositive,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          pnlPos ? Icons.arrow_upward : Icons.arrow_downward,
-                          size: 12,
-                          color: pnlPos
-                              ? AppColors.darkPositive
-                              : AppColors.darkSecondary,
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 150),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          CurrencyFormatter.format(position.currentValue),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.darkPositive,
+                          ),
                         ),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${CurrencyFormatter.formatPnl(position.pnlAbsolute)} (${position.pnlPercent.toStringAsFixed(1)}%)',
-                          style: theme.textTheme.bodySmall?.copyWith(
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            pnlPos ? Icons.arrow_upward : Icons.arrow_downward,
+                            size: 12,
                             color: pnlPos
                                 ? AppColors.darkPositive
                                 : AppColors.darkSecondary,
-                            fontWeight: FontWeight.w600,
                           ),
-                        ),
-                      ],
-                    ),
-                    if (position.lastPriceUpdate != null)
-                      Text(
-                        DateFormatter.priceAge(position.lastPriceUpdate),
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                          const SizedBox(width: 2),
+                          Flexible(
+                            child: Text(
+                              '${CurrencyFormatter.formatPnl(position.pnlAbsolute)} (${position.pnlPercent.toStringAsFixed(1)}%)',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: pnlPos
+                                    ? AppColors.darkPositive
+                                    : AppColors.darkSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                  ],
+                      if (position.lastPriceUpdate != null)
+                        Text(
+                          DateFormatter.priceAge(position.lastPriceUpdate),
+                          style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                        ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -342,22 +373,47 @@ class _TickerBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final display = ticker.length > 5 ? ticker.substring(0, 5) : ticker;
+    // Strip dots/dots (soft wrap points on Flutter web) and cap at 4 chars
+    final raw = ticker.replaceAll('.', '');
+    final display = raw.length > 4 ? raw.substring(0, 4) : raw;
+    final brandColor = gradient.first;
     return Container(
-      width: 48,
-      height: 48,
+      width: 46,
+      height: 46,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: gradient),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: brandColor.withValues(alpha: 0.45),
+          width: 1.5,
+        ),
+        gradient: LinearGradient(
+          colors: [
+            brandColor.withValues(alpha: 0.15),
+            brandColor.withValues(alpha: 0.06),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
-      child: Center(
+      child: ShaderMask(
+        shaderCallback: (bounds) => LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(bounds),
+        blendMode: BlendMode.srcIn,
         child: Text(
           display,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.clip,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: FontWeight.w800,
-            letterSpacing: 0.5,
+            letterSpacing: 0.3,
           ),
         ),
       ),
@@ -518,6 +574,10 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
       );
       if (_isEdit) {
         await repo.update(p);
+        if (!mounted) return;
+        final celebType = _assetType == 'ETF' ? AddCelebrationType.etf : AddCelebrationType.stock;
+        // ignore: use_build_context_synchronously
+        await showAddCelebration(context, celebType, isEdit: true);
       } else {
         // Auto-merge if a position with the same ticker (or name) already exists
         final existing = ref.read(etfStreamProvider).valueOrNull ?? [];
@@ -551,6 +611,12 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
           }
         } else {
           await repo.add(p);
+          if (!mounted) return;
+          final celebType = _assetType == 'ETF'
+              ? AddCelebrationType.etf
+              : AddCelebrationType.stock;
+          // ignore: use_build_context_synchronously
+          await showAddCelebration(context, celebType);
         }
       }
       if (mounted) Navigator.pop(context);

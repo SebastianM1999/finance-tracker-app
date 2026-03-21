@@ -2,6 +2,7 @@ import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -9,6 +10,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/utils/number_utils.dart';
 import '../../../shared/services/notification_service.dart';
+import '../../../shared/widgets/add_celebration.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/currency_input_field.dart';
 import '../../../shared/widgets/shimmer_loading.dart';
@@ -45,7 +47,10 @@ class FestgeldTabBody extends ConsumerWidget {
             ? const _EmptyState()
             : Column(
                 children: [
-                  _TotalBanner(total: total, list: list),
+                  _TotalBanner(total: total, list: list)
+                      .animate()
+                      .fadeIn(duration: 400.ms)
+                      .slideY(begin: -0.1, end: 0, duration: 400.ms),
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: () async =>
@@ -55,8 +60,18 @@ class FestgeldTabBody extends ConsumerWidget {
                         itemCount: list.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: 12),
-                        itemBuilder: (ctx, i) =>
-                            _FestgeldCard(item: list[i]),
+                        itemBuilder: (ctx, i) => _FestgeldCard(item: list[i])
+                            .animate()
+                            .fadeIn(
+                              delay: Duration(milliseconds: i.clamp(0, 4) * 55),
+                              duration: 300.ms,
+                            )
+                            .slideY(
+                              begin: 0.08,
+                              end: 0,
+                              delay: Duration(milliseconds: i.clamp(0, 4) * 55),
+                              duration: 300.ms,
+                            ),
                       ),
                     ),
                   ),
@@ -107,34 +122,44 @@ class _TotalBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Gesamt angelegt',
-                  style: TextStyle(color: Colors.white70, fontSize: 12)),
-              Text(
-                CurrencyFormatter.format(total),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Gesamt angelegt',
+                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    CurrencyFormatter.format(total),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               const Text('Zinsertrag',
                   style: TextStyle(color: Colors.white70, fontSize: 12)),
-              Text(
-                '+${CurrencyFormatter.format(totalInterest)}',
-                style: const TextStyle(
-                  color: Color(0xFFB8F5D8),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '+${CurrencyFormatter.format(totalInterest)}',
+                  style: const TextStyle(
+                    color: Color(0xFFB8F5D8),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -151,11 +176,13 @@ class _FestgeldCard extends ConsumerWidget {
   const _FestgeldCard({required this.item});
   final Festgeld item;
 
-  Color _barColor(double progress, bool isExpired) {
+  /// Single color used for bar, left accent, and bottom chip.
+  /// Red is reserved exclusively for expired cards.
+  Color? _urgencyColor(bool isExpired, double progress) {
     if (isExpired) return AppColors.darkSecondary;
     if (progress >= 0.90) return const Color(0xFF4FC770);
     if (progress >= 0.75) return AppColors.darkPositive;
-    return AppColors.darkPrimary;
+    return null; // not urgent yet
   }
 
   @override
@@ -164,6 +191,11 @@ class _FestgeldCard extends ConsumerWidget {
     final daysLeft = item.daysRemaining;
     final isExpired = daysLeft < 0;
     final daysLabel = DateFormatter.daysRemaining(item.endDate);
+
+    final urgency = _urgencyColor(isExpired, item.progress);
+    final barColor = urgency ?? AppColors.darkPrimary;
+    final showAccent = urgency != null;
+    final statusColor = urgency; // chip only shown when urgency != null
 
     return Dismissible(
       key: Key(item.id),
@@ -188,169 +220,151 @@ class _FestgeldCard extends ConsumerWidget {
         await NotificationService.instance.cancelFestgeldNotifications(item.id);
       },
       child: Card(
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
           onTap: () => showModalBottomSheet(
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
             builder: (_) => _FestgeldSheet(item: item),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Header row
-                Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                            colors: AppColors.gradientFestgeld),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.savings_outlined,
-                          color: Colors.white, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(item.bankName,
-                              style: theme.textTheme.titleMedium),
-                          Text(
-                            '${item.durationMonths} Monate · ${item.interestRate.toStringAsFixed(2)} % p.a.',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                // Left urgency accent bar
+                if (showAccent)
+                  Container(width: 3, color: urgency),
+
+                // Card content
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        showAccent ? 13 : 16, 14, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          CurrencyFormatter.format(item.amount),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700),
+                        // Header row
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: AppColors.gradientFestgeld,
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.savings_outlined,
+                                  color: Colors.white, size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(item.bankName,
+                                      style: theme.textTheme.titleMedium),
+                                  Text(
+                                    '${item.durationMonths} Monate · ${item.interestRate.toStringAsFixed(2)} % p.a.',
+                                    style: theme.textTheme.bodyMedium,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 120),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      CurrencyFormatter.format(item.amount),
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w700),
+                                    ),
+                                  ),
+                                  Text(
+                                    '→ ${CurrencyFormatter.format(item.projectedPayout)}',
+                                    style: theme.textTheme.bodySmall
+                                        ?.copyWith(
+                                            color: AppColors.darkPositive),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          '→ ${CurrencyFormatter.format(item.projectedPayout)}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppColors.darkPositive),
+
+                        const SizedBox(height: 12),
+
+                        // Progress bar
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: item.progress,
+                            minHeight: 5,
+                            backgroundColor: theme.colorScheme.outlineVariant
+                                .withValues(alpha: 0.25),
+                            valueColor: AlwaysStoppedAnimation<Color>(barColor),
+                          ),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        // Date row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${DateFormatter.format(item.startDate)} – ${DateFormatter.format(item.endDate)}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            if (statusColor != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color:
+                                      statusColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  daysLabel,
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              )
+                            else
+                              Text(
+                                daysLabel,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.5),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-
-                const SizedBox(height: 10),
-
-                // Urgency badge
-                if (item.progress >= 0.75 || isExpired)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _UrgencyBadge(daysLeft: daysLeft, isExpired: isExpired, progress: item.progress),
                   ),
-
-                // Progress bar
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: item.progress,
-                    minHeight: 6,
-                    backgroundColor: theme.colorScheme.outlineVariant
-                        .withValues(alpha: 0.3),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      _barColor(item.progress, isExpired),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                // Date row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${DateFormatter.format(item.startDate)} – ${DateFormatter.format(item.endDate)}',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                    Text(
-                      daysLabel,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: isExpired
-                            ? AppColors.darkSecondary
-                            : daysLeft <= 30
-                                ? AppColors.darkPositive
-                                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ── Urgency Badge ─────────────────────────────────────────────────────────────
-
-class _UrgencyBadge extends StatelessWidget {
-  const _UrgencyBadge({required this.daysLeft, required this.isExpired, required this.progress});
-  final int daysLeft;
-  final bool isExpired;
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color bg;
-    final IconData icon;
-    final String label;
-
-    if (isExpired) {
-      bg = AppColors.darkSecondary;
-      icon = Icons.lock_clock_outlined;
-      label = 'Abgelaufen';
-    } else if (progress >= 0.90) {
-      bg = AppColors.darkPositive;
-      icon = Icons.celebration_outlined;
-      label = daysLeft == 0 ? 'Heute fällig!' : 'Fällig in $daysLeft ${daysLeft == 1 ? 'Tag' : 'Tagen'}';
-    } else {
-      bg = const Color(0xFF4FC770);
-      icon = Icons.schedule_outlined;
-      label = 'Fällig in $daysLeft Tagen';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: bg.withValues(alpha: 0.4), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: bg),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: bg,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -578,6 +592,12 @@ class _FestgeldSheetState extends ConsumerState<_FestgeldSheet> {
       // Always update — for new entries this writes the notifIds back;
       // for edits this overwrites with fresh schedule.
       await repo.update(fWithIds);
+
+      // Celebrate add or edit
+      if (mounted) {
+        // ignore: use_build_context_synchronously
+        await showAddCelebration(context, AddCelebrationType.festgeld, isEdit: _isEdit);
+      }
 
       // For new entries, ask about calendar BEFORE closing the sheet
       // so the context is still valid when the intent fires.

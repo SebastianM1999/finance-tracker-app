@@ -238,12 +238,12 @@ final autoSaveNetWorthProvider = Provider<void>((ref) {
       () => ref.read(netWorthRepositoryProvider).saveOrUpdate(snapshot));
 });
 
-// ── Upcoming Festgeld maturities (within 60 days) ────────────────────────────
+// ── Upcoming Festgeld maturities (expired or due within 60 days) ─────────────
 
 final upcomingMaturitiesProvider = Provider<List<Festgeld>>((ref) {
   final list = ref.watch(festgeldStreamProvider).valueOrNull ?? [];
   return list
-      .where((f) => f.daysRemaining >= 0 && f.daysRemaining <= 60)
+      .where((f) => f.daysRemaining < 8)
       .toList()
     ..sort((a, b) => a.endDate.compareTo(b.endDate));
 });

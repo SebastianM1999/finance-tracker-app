@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -10,7 +11,9 @@ import '../../../core/utils/date_formatter.dart';
 import '../../../shared/data/known_assets.dart';
 import '../../../shared/services/price_service.dart';
 import '../../../shared/widgets/asset_search_sheet.dart';
+import '../../../shared/widgets/add_celebration.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
+import '../../../shared/widgets/glow_icon.dart';
 import '../../../shared/widgets/currency_input_field.dart';
 import '../../../shared/widgets/shimmer_loading.dart';
 import '../../home/providers/home_providers.dart';
@@ -45,6 +48,8 @@ class _CryptoTabBodyState extends ConsumerState<CryptoTabBody> {
           currentPrice: result.price,
           notes: pos.notes,
           createdAt: pos.createdAt,
+          lastPriceUpdate: DateTime.now(),
+          imageUrl: pos.imageUrl,
         ));
         updated++;
       }
@@ -71,10 +76,10 @@ class _CryptoTabBodyState extends ConsumerState<CryptoTabBody> {
             ? const _EmptyState()
             : Column(
                 children: [
-                  _TotalBanner(
-                    total: total,
-                    list: list,
-                  ),
+                  _TotalBanner(total: total, list: list)
+                      .animate()
+                      .fadeIn(duration: 400.ms)
+                      .slideY(begin: -0.1, end: 0, duration: 400.ms),
                   const _PullHint(),
                   Expanded(
                     child: RefreshIndicator(
@@ -84,8 +89,18 @@ class _CryptoTabBodyState extends ConsumerState<CryptoTabBody> {
                         itemCount: list.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: 12),
-                        itemBuilder: (ctx, i) =>
-                            _CryptoCard(position: list[i]),
+                        itemBuilder: (ctx, i) => _CryptoCard(position: list[i])
+                            .animate()
+                            .fadeIn(
+                              delay: Duration(milliseconds: i.clamp(0, 4) * 55),
+                              duration: 300.ms,
+                            )
+                            .slideX(
+                              begin: 0.08,
+                              end: 0,
+                              delay: Duration(milliseconds: i.clamp(0, 4) * 55),
+                              duration: 300.ms,
+                            ),
                       ),
                     ),
                   ),
@@ -166,35 +181,45 @@ class _TotalBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Aktueller Wert',
-                  style: TextStyle(color: Colors.white70, fontSize: 12)),
-              Text(
-                CurrencyFormatter.format(total),
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Aktueller Wert',
+                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    CurrencyFormatter.format(total),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               const Text('Gesamt P&L',
                   style: TextStyle(color: Colors.white70, fontSize: 12)),
-              Text(
-                CurrencyFormatter.formatPnl(pnl),
-                style: TextStyle(
-                  color: pnlPos
-                      ? const Color(0xFFB8F5D8)
-                      : const Color(0xFFFFB3B3),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  CurrencyFormatter.formatPnl(pnl),
+                  style: TextStyle(
+                    color: pnlPos
+                        ? const Color(0xFFB8F5D8)
+                        : const Color(0xFFFFB3B3),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -250,7 +275,7 @@ class _CryptoCard extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                _CryptoLogo(symbol: position.coinSymbol),
+                _CryptoLogo(symbol: position.coinSymbol, imageUrl: position.imageUrl),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -267,45 +292,55 @@ class _CryptoCard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      CurrencyFormatter.format(position.currentValue),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.darkPositive,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          pnlPos ? Icons.arrow_upward : Icons.arrow_downward,
-                          size: 12,
-                          color: pnlPos
-                              ? AppColors.darkPositive
-                              : AppColors.darkSecondary,
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 150),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          CurrencyFormatter.format(position.currentValue),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.darkPositive,
+                          ),
                         ),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${CurrencyFormatter.formatPnl(position.pnlAbsolute)} (${position.pnlPercent.toStringAsFixed(1)}%)',
-                          style: theme.textTheme.bodySmall?.copyWith(
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            pnlPos ? Icons.arrow_upward : Icons.arrow_downward,
+                            size: 12,
                             color: pnlPos
                                 ? AppColors.darkPositive
                                 : AppColors.darkSecondary,
-                            fontWeight: FontWeight.w600,
                           ),
-                        ),
-                      ],
-                    ),
-                    if (position.lastPriceUpdate != null)
-                      Text(
-                        DateFormatter.priceAge(position.lastPriceUpdate),
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                          const SizedBox(width: 2),
+                          Flexible(
+                            child: Text(
+                              '${CurrencyFormatter.formatPnl(position.pnlAbsolute)} (${position.pnlPercent.toStringAsFixed(1)}%)',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: pnlPos
+                                    ? AppColors.darkPositive
+                                    : AppColors.darkSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                  ],
+                      if (position.lastPriceUpdate != null)
+                        Text(
+                          DateFormatter.priceAge(position.lastPriceUpdate),
+                          style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                        ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -319,35 +354,31 @@ class _CryptoCard extends ConsumerWidget {
 // ── Crypto Logo ───────────────────────────────────────────────────────────────
 
 class _CryptoLogo extends StatelessWidget {
-  const _CryptoLogo({required this.symbol});
+  const _CryptoLogo({required this.symbol, this.imageUrl});
   final String symbol;
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
-    final url =
+    final url = imageUrl ??
         'https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol.toLowerCase()}.png';
     return CachedNetworkImage(
       imageUrl: url,
-      width: 40,
-      height: 40,
+      width: 46,
+      height: 46,
       imageBuilder: (_, img) => Container(
-        width: 40,
-        height: 40,
+        width: 46,
+        height: 46,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           image: DecorationImage(image: img, fit: BoxFit.cover),
         ),
       ),
-      errorWidget: (_, __, ___) => Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: const LinearGradient(colors: AppColors.gradientCrypto),
-        ),
-        child: const Center(
-          child: FaIcon(FontAwesomeIcons.coins, color: Colors.white, size: 18),
-        ),
+      errorWidget: (_, __, ___) => GlowIcon(
+        icon: FontAwesomeIcons.coins,
+        isFa: true,
+        gradient: AppColors.gradientCrypto,
+        size: 22,
       ),
     );
   }
@@ -410,6 +441,7 @@ class _CryptoSheetState extends ConsumerState<_CryptoSheet> {
   bool _fetchingPrice = false;
 
   KnownCrypto? _pickedAsset;
+  String? _imageUrl;
   bool _manualEntry = false;
 
   // Input mode toggle
@@ -444,6 +476,7 @@ class _CryptoSheetState extends ConsumerState<_CryptoSheet> {
   void _onAssetPicked(KnownCrypto asset) {
     setState(() {
       _pickedAsset = asset;
+      _imageUrl = asset.imageUrl;
       _coinName.text = asset.name;
       _coinSymbol.text = asset.symbol;
       _fetchingPrice = true;
@@ -463,6 +496,7 @@ class _CryptoSheetState extends ConsumerState<_CryptoSheet> {
   void _clearPick() {
     setState(() {
       _pickedAsset = null;
+      _imageUrl = null;
       _coinName.clear();
       _coinSymbol.clear();
       _buyPrice = 0;
@@ -489,9 +523,13 @@ class _CryptoSheetState extends ConsumerState<_CryptoSheet> {
         currentPrice: _currentPrice > 0 ? _currentPrice : _buyPrice,
         notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
         createdAt: widget.position?.createdAt ?? now,
+        imageUrl: _imageUrl ?? widget.position?.imageUrl,
       );
       if (_isEdit) {
         await repo.update(p);
+        if (!mounted) return;
+        // ignore: use_build_context_synchronously
+        await showAddCelebration(context, AddCelebrationType.crypto, isEdit: true);
       } else {
         // Auto-merge if a position with the same symbol already exists
         final existing = ref.read(cryptoStreamProvider).valueOrNull ?? [];
@@ -512,6 +550,7 @@ class _CryptoSheetState extends ConsumerState<_CryptoSheet> {
             currentPrice: p.currentPrice,
             notes: match.notes,
             createdAt: match.createdAt,
+            imageUrl: p.imageUrl ?? match.imageUrl,
           ));
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -520,6 +559,9 @@ class _CryptoSheetState extends ConsumerState<_CryptoSheet> {
           }
         } else {
           await repo.add(p);
+          if (!mounted) return;
+          // ignore: use_build_context_synchronously
+          await showAddCelebration(context, AddCelebrationType.crypto);
         }
       }
       if (mounted) Navigator.pop(context);
@@ -588,6 +630,12 @@ class _CryptoSheetState extends ConsumerState<_CryptoSheet> {
                   if (picked != null) _onAssetPicked(picked);
                 },
                 onClear: _pickedAsset != null ? _clearPick : null,
+                leadingWidget: _pickedAsset != null
+                    ? _CryptoLogo(
+                        symbol: _pickedAsset!.symbol,
+                        imageUrl: _imageUrl,
+                      )
+                    : null,
               ),
               const SizedBox(height: 6),
               if (_showPicker)

@@ -8,13 +8,38 @@ const YAHOO2_BASE = "https://query2.finance.yahoo.com/v8/finance/chart";
 const YAHOO_SEARCH_BASE = "https://query1.finance.yahoo.com/v1/finance/search";
 const STOOQ_BASE = "https://stooq.com/q/l/";
 const STOCKPRICES_BASE = "https://stockprices.dev/api";
+const COINGECKO_SEARCH = "https://api.coingecko.com/api/v3/search";
+const COINGECKO_PRICE = "https://api.coingecko.com/api/v3/simple/price";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Cache EUR rate within a single function invocation to avoid redundant calls
+let _cachedEurRate = null;
 async function usdToEur() {
+  if (_cachedEurRate) return _cachedEurRate;
   try {
     const res = await axios.get(FRANKFURTER_URL, { timeout: 8000 });
-    return res.data?.rates?.EUR ?? null;
+    _cachedEurRate = res.data?.rates?.EUR ?? null;
+    return _cachedEurRate;
+  } catch { return null; }
+}
+
+// CoinGecko fallback: search for coin by symbol, then fetch EUR price
+async function coingeckoPrice(symbol) {
+  try {
+    const searchRes = await axios.get(`${COINGECKO_SEARCH}?query=${encodeURIComponent(symbol)}`, {
+      headers: { Accept: "application/json" }, timeout: 8000,
+    });
+    const coins = searchRes.data?.coins ?? [];
+    // Pick the coin whose symbol exactly matches (case-insensitive)
+    const coin = coins.find((c) => c.symbol?.toUpperCase() === symbol.toUpperCase());
+    if (!coin?.id) return null;
+
+    const priceRes = await axios.get(`${COINGECKO_PRICE}?ids=${coin.id}&vs_currencies=eur`, {
+      headers: { Accept: "application/json" }, timeout: 8000,
+    });
+    const price = priceRes.data?.[coin.id]?.eur;
+    return price != null ? { price, source: "CoinGecko" } : null;
   } catch { return null; }
 }
 
@@ -95,6 +120,7 @@ async function stockpricesPrice(ticker, isEtf) {
 exports.fetchPrice = onRequest(
   { region: "us-central1", cors: true },
   async (req, res) => {
+    _cachedEurRate = null; // reset per-request cache
     const { type, symbol, ticker, isEtf, q } = req.query;
 
       // ── Crypto ──────────────────────────────────────────────────────────────
@@ -110,6 +136,11 @@ exports.fetchPrice = onRequest(
           const rate = await usdToEur();
           if (rate) return res.json({ price: usdtPrice * rate, source: "Binance" });
         }
+
+        // Fallback: CoinGecko (covers coins not listed on Binance)
+        const cgResult = await coingeckoPrice(sym);
+        if (cgResult) return res.json(cgResult);
+
         return res.status(404).json({ error: "Price not found" });
       }
 

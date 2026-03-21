@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -26,22 +27,85 @@ class _CryptoSearchSheet extends StatefulWidget {
 }
 
 class _CryptoSearchSheetState extends State<_CryptoSearchSheet> {
-  final _ctrl = TextEditingController();
-  String _query = '';
+  static String _savedQuery = '';
 
-  List<KnownCrypto> get _filtered {
-    if (_query.isEmpty) return KnownAssets.cryptos;
-    final words = _query.toLowerCase().split(RegExp(r'\s+'));
-    return KnownAssets.cryptos.where((c) {
-      final haystack = '${c.name} ${c.symbol}'.toLowerCase();
-      return words.every((w) => haystack.contains(w));
-    }).toList();
+  late final TextEditingController _ctrl;
+  Timer? _debounce;
+  List<KnownCrypto> _results = KnownAssets.cryptos;
+  bool _loading = false;
+  // geckoId → EUR price, populated after each search
+  Map<String, double> _prices = {};
+  // symbol.toUpperCase() → geckoId, for price lookup
+  Map<String, String> _geckoIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: _savedQuery);
+    if (_savedQuery.isNotEmpty) {
+      _results = _localFilter(_savedQuery);
+      _loading = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _runSearch(_savedQuery));
+    }
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _ctrl.dispose();
     super.dispose();
+  }
+
+  List<KnownCrypto> _localFilter(String q) {
+    final words = q.toLowerCase().split(RegExp(r'\s+'));
+    return KnownAssets.cryptos.where((c) {
+      final hay = '${c.name} ${c.symbol}'.toLowerCase();
+      return words.every((w) => hay.contains(w));
+    }).toList();
+  }
+
+  void _onSearch(String v) {
+    _debounce?.cancel();
+    _savedQuery = v.trim();
+    if (v.trim().isEmpty) {
+      setState(() { _results = KnownAssets.cryptos; _loading = false; _prices = {}; _geckoIds = {}; });
+      return;
+    }
+    setState(() { _results = _localFilter(v.trim()); _loading = true; });
+    _debounce = Timer(const Duration(milliseconds: 400), () => _runSearch(v.trim()));
+  }
+
+  Future<void> _runSearch(String q) async {
+    final local = _localFilter(q);
+    final live = await PriceService.searchCryptos(q);
+    final localSymbols = local.map((c) => c.symbol.toUpperCase()).toSet();
+    final extra = live
+        .where((c) => !localSymbols.contains(c.symbol.toUpperCase()))
+        .map((c) => KnownCrypto(c.name, c.symbol, imageUrl: c.imageUrl))
+        .toList();
+    final combined = [...local, ...extra];
+    // Build symbol → geckoId map from live results
+    final geckoIds = <String, String>{
+      for (final r in live) r.symbol.toUpperCase(): r.id,
+    };
+    if (!mounted) return;
+    setState(() { _results = combined; _loading = false; _geckoIds = geckoIds; });
+    // Batch-fetch EUR prices from CoinGecko
+    final ids = live.map((r) => r.id).toList();
+    final prices = await PriceService.fetchCoinGeckoPrices(ids);
+    if (mounted) setState(() => _prices = prices);
+  }
+
+  double? _priceFor(String symbol) {
+    final id = _geckoIds[symbol.toUpperCase()];
+    if (id == null) return null;
+    return _prices[id];
+  }
+
+  int get _itemCount {
+    if (_loading && _results.isEmpty) return 1;
+    if (_results.isEmpty) return 1;
+    return _results.length;
   }
 
   @override
@@ -49,20 +113,96 @@ class _CryptoSearchSheetState extends State<_CryptoSearchSheet> {
     return _SearchSheetScaffold(
       title: 'Coin auswählen',
       searchCtrl: _ctrl,
-      onSearch: (v) => setState(() => _query = v),
-      itemCount: _filtered.length,
+      onSearch: _onSearch,
+      itemCount: _itemCount,
       itemBuilder: (ctx, i) {
-        final a = _filtered[i];
+        if (_loading && _results.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(40),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (_results.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(40),
+            child: Center(child: Text('Keine Ergebnisse gefunden')),
+          );
+        }
+        final a = _results[i];
+        final price = _priceFor(a.symbol);
+        final formatted = price == null
+            ? null
+            : price >= 1
+                ? '${price.toStringAsFixed(2)}€'
+                : '${price.toStringAsFixed(4)}€';
         return _AssetTile(
-          leading: _SymbolBadge(
-            label: a.symbol,
-            gradient: AppColors.gradientCrypto,
-          ),
+          leading: _CryptoIcon(symbol: a.symbol, imageUrl: a.imageUrl),
           title: a.name,
           subtitle: a.symbol,
-          trailing: null,
+          trailing: formatted != null
+              ? Text(
+                  formatted,
+                  style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.darkPositive,
+                      ),
+                )
+              : null,
           onTap: () => Navigator.pop(ctx, a),
         );
+      },
+    );
+  }
+}
+
+// ── Crypto icon with fallback chain ───────────────────────────────────────────
+
+class _CryptoIcon extends StatelessWidget {
+  const _CryptoIcon({required this.symbol, this.imageUrl});
+  final String symbol;
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final primaryUrl = imageUrl ??
+        'https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol.toLowerCase()}.png';
+
+    return CachedNetworkImage(
+      imageUrl: primaryUrl,
+      width: 44,
+      height: 44,
+      imageBuilder: (_, img) => Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          image: DecorationImage(image: img, fit: BoxFit.cover),
+        ),
+      ),
+      errorWidget: (_, __, ___) {
+        // If we used a CoinGecko URL and it failed, try spothq as second chance
+        if (imageUrl != null) {
+          final fallbackUrl =
+              'https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol.toLowerCase()}.png';
+          return CachedNetworkImage(
+            imageUrl: fallbackUrl,
+            width: 44,
+            height: 44,
+            imageBuilder: (_, img) => Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                image: DecorationImage(image: img, fit: BoxFit.cover),
+              ),
+            ),
+            errorWidget: (_, __, ___) => _SymbolBadge(
+              label: symbol,
+              gradient: AppColors.gradientCrypto,
+            ),
+          );
+        }
+        return _SymbolBadge(label: symbol, gradient: AppColors.gradientCrypto);
       },
     );
   }
@@ -303,6 +443,7 @@ class AssetPickerRow extends StatelessWidget {
     required this.gradient,
     required this.onTap,
     this.onClear,
+    this.leadingWidget,
   });
 
   final String label;
@@ -311,6 +452,9 @@ class AssetPickerRow extends StatelessWidget {
   final List<Color> gradient;
   final VoidCallback onTap;
   final VoidCallback? onClear;
+  /// Optional custom leading widget shown when an asset is selected.
+  /// Falls back to [_SymbolBadge] when null.
+  final Widget? leadingWidget;
 
   bool get _hasSelection => selectedName != null;
 
@@ -333,7 +477,7 @@ class AssetPickerRow extends StatelessWidget {
         child: Row(
           children: [
             if (_hasSelection) ...[
-              _SymbolBadge(label: selectedTag!, gradient: gradient),
+              leadingWidget ?? _SymbolBadge(label: selectedTag!, gradient: gradient),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -486,7 +630,7 @@ class _AssetTile extends StatelessWidget {
                   Text(title,
                       style: theme.textTheme.bodyLarge
                           ?.copyWith(fontWeight: FontWeight.w600),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis),
                   Text(subtitle,
                       style: theme.textTheme.bodySmall,

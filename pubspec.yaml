@@ -38,6 +38,7 @@ dependencies:
 
   # Animations
   flutter_animate: ^4.5.0
+  animations: ^2.0.11
 
   # Images
   cached_network_image: ^3.4.1

@@ -12,6 +12,7 @@ class CryptoPosition {
     this.notes,
     required this.createdAt,
     this.lastPriceUpdate,
+    this.imageUrl,
   });
 
   final String id;
@@ -24,6 +25,7 @@ class CryptoPosition {
   final String? notes;
   final DateTime createdAt;
   final DateTime? lastPriceUpdate;
+  final String? imageUrl;
 
   double get currentValue => amount * currentPrice;
   double get buyValue => amount * buyPrice;
@@ -45,6 +47,7 @@ class CryptoPosition {
       lastPriceUpdate: d['lastPriceUpdate'] != null
           ? (d['lastPriceUpdate'] as Timestamp).toDate()
           : null,
+      imageUrl: d['imageUrl'] as String?,
     );
   }
 
@@ -60,5 +63,6 @@ class CryptoPosition {
         'lastPriceUpdate': lastPriceUpdate != null
             ? Timestamp.fromDate(lastPriceUpdate!)
             : null,
+        'imageUrl': imageUrl,
       };
 }

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../shared/widgets/add_celebration.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
+import '../../../shared/widgets/glow_icon.dart';
 import '../../../shared/widgets/currency_input_field.dart';
 import '../../../shared/widgets/shimmer_loading.dart';
 import '../../home/providers/home_providers.dart';
@@ -32,7 +35,10 @@ class SchuldenScreen extends ConsumerWidget {
               list.where((s) => !s.iOwe).toList();
           return Column(
             children: [
-              _SummaryBanner(total: total, list: list),
+              _SummaryBanner(total: total, list: list)
+                  .animate()
+                  .fadeIn(duration: 400.ms)
+                  .slideY(begin: -0.1, end: 0, duration: 400.ms),
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async =>
@@ -47,9 +53,20 @@ class SchuldenScreen extends ConsumerWidget {
                         total: iOwe.fold(0.0, (s, d) => s + d.amount),
                       ),
                       const SizedBox(height: 8),
-                      ...iOwe.map((d) => Padding(
+                      ...iOwe.asMap().entries.map((e) => Padding(
                             padding: const EdgeInsets.only(bottom: 12),
-                            child: _SchuldCard(schuld: d),
+                            child: _SchuldCard(schuld: e.value)
+                                .animate()
+                                .fadeIn(
+                                  delay: Duration(milliseconds: e.key.clamp(0, 4) * 55),
+                                  duration: 300.ms,
+                                )
+                                .slideX(
+                                  begin: 0.08,
+                                  end: 0,
+                                  delay: Duration(milliseconds: e.key.clamp(0, 4) * 55),
+                                  duration: 300.ms,
+                                ),
                           )),
                     ],
                     if (owedToMe.isNotEmpty) ...[
@@ -60,9 +77,20 @@ class SchuldenScreen extends ConsumerWidget {
                         total: owedToMe.fold(0.0, (s, d) => s + d.amount),
                       ),
                       const SizedBox(height: 8),
-                      ...owedToMe.map((d) => Padding(
+                      ...owedToMe.asMap().entries.map((e) => Padding(
                             padding: const EdgeInsets.only(bottom: 12),
-                            child: _SchuldCard(schuld: d),
+                            child: _SchuldCard(schuld: e.value)
+                                .animate()
+                                .fadeIn(
+                                  delay: Duration(milliseconds: e.key.clamp(0, 4) * 55),
+                                  duration: 300.ms,
+                                )
+                                .slideX(
+                                  begin: 0.08,
+                                  end: 0,
+                                  delay: Duration(milliseconds: e.key.clamp(0, 4) * 55),
+                                  duration: 300.ms,
+                                ),
                           )),
                     ],
                   ],
@@ -118,49 +146,65 @@ class _SummaryBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Ich schulde',
-                  style: TextStyle(color: Colors.white70, fontSize: 12)),
-              Text(
-                CurrencyFormatter.format(iOweTotal),
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Ich schulde',
+                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    CurrencyFormatter.format(iOweTotal),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Text('Netto',
-                  style: TextStyle(color: Colors.white70, fontSize: 12)),
-              Text(
-                CurrencyFormatter.formatPnl(net),
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Text('Netto',
+                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    CurrencyFormatter.formatPnl(net),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const Text('Mir geschuldet',
-                  style: TextStyle(color: Colors.white70, fontSize: 12)),
-              Text(
-                CurrencyFormatter.format(owedTotal),
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Text('Mir geschuldet',
+                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    CurrencyFormatter.format(owedTotal),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -257,20 +301,13 @@ class _SchuldCard extends ConsumerWidget {
                 horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    schuld.iOwe
-                        ? Icons.arrow_upward
-                        : Icons.arrow_downward,
-                    color: color,
-                    size: 22,
-                  ),
+                GlowIcon(
+                  icon: schuld.iOwe
+                      ? Icons.arrow_upward_rounded
+                      : Icons.arrow_downward_rounded,
+                  gradient: [color, color.withValues(alpha: 0.6)],
+                  size: 26,
+                  glowOpacity: 0.3,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -297,11 +334,18 @@ class _SchuldCard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                Text(
-                  CurrencyFormatter.format(schuld.amount),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w700,
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 140),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      CurrencyFormatter.format(schuld.amount),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -466,6 +510,9 @@ class _SchuldSheetState extends ConsumerState<_SchuldSheet> {
       } else {
         await repo.add(s);
       }
+      if (!mounted) return;
+      // ignore: use_build_context_synchronously
+      await showAddCelebration(context, AddCelebrationType.schulden, isEdit: _isEdit);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
