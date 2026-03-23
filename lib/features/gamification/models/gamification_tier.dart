@@ -23,7 +23,7 @@ extension GamificationTierX on GamificationTier {
       case GamificationTier.silver:
         return const Color(0xFFB8C8D8);
       case GamificationTier.gold:
-        return const Color(0xFFFFD700);
+        return const Color(0xFFD4A017); // rich amber gold
       case GamificationTier.diamond:
         return const Color(0xFF00CFFF);
     }
@@ -37,7 +37,7 @@ extension GamificationTierX on GamificationTier {
       case GamificationTier.silver:
         return [const Color(0xFFE0E8F0), const Color(0xFF8A9AB0)];
       case GamificationTier.gold:
-        return [const Color(0xFFFFE566), const Color(0xFFFFAA00)];
+        return [const Color(0xFFE8C23A), const Color(0xFFB8860B)];
       case GamificationTier.diamond:
         return [const Color(0xFF00CFFF), const Color(0xFF7B2FBE), const Color(0xFFFF6EC7)];
     }
@@ -50,7 +50,7 @@ extension GamificationTierX on GamificationTier {
         return [
           const Color(0xFFFFB347),
           const Color(0xFFFF7C2A),
-          const Color(0xFFFFD700),
+          const Color(0xFFD4A017),
           Colors.white,
           const Color(0xFFFFE0A0),
         ];
@@ -64,10 +64,10 @@ extension GamificationTierX on GamificationTier {
         ];
       case GamificationTier.gold:
         return [
-          const Color(0xFFFFE566),
-          const Color(0xFFFFAA00),
+          const Color(0xFFE8C23A),
+          const Color(0xFFD4A017),
           Colors.white,
-          const Color(0xFFFFD700),
+          const Color(0xFFB8860B),
           const Color(0xFFFFF0A0),
         ];
       case GamificationTier.diamond:
@@ -93,7 +93,7 @@ extension GamificationTierX on GamificationTier {
       case GamificationTier.silver:
         return const Color(0xFFB8C8D8);
       case GamificationTier.gold:
-        return const Color(0xFFFFD700);
+        return const Color(0xFFD4A017);
       case GamificationTier.diamond:
         return const Color(0xFF00CFFF);
     }

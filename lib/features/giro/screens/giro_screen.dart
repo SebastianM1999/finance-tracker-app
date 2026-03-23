@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../gamification/utils/gamification_trigger.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../shared/widgets/add_celebration.dart';
@@ -298,6 +300,7 @@ class _GiroSheetState extends ConsumerState<_GiroSheet> {
       // ignore: use_build_context_synchronously
       await showAddCelebration(context, AddCelebrationType.giro, isEdit: _isEdit);
       HapticFeedback.lightImpact();
+      if (mounted) triggerGamificationOnSave(context, ref);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

@@ -176,7 +176,7 @@ class _ProSectionHeader extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+              colors: [Color(0xFFD4A017), Color(0xFFB8860B)],
             ),
             borderRadius: BorderRadius.circular(6),
           ),
@@ -246,7 +246,7 @@ class _ProCard extends ConsumerWidget {
                               horizontal: 10, vertical: 3),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                              colors: [Color(0xFFD4A017), Color(0xFFB8860B)],
                             ),
                             borderRadius: BorderRadius.circular(6),
                           ),
@@ -304,7 +304,7 @@ class _ProCard extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                  colors: [Color(0xFFD4A017), Color(0xFFB8860B)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),

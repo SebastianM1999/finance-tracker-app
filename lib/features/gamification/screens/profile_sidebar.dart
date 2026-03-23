@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/profile_image_stub.dart'
     if (dart.library.js_interop) '../../../shared/widgets/profile_image_web.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../models/badge_definition.dart';
 import '../models/gamification_models.dart';
 import '../providers/gamification_providers.dart';
 import '../widgets/tier_ring.dart';
@@ -60,7 +61,12 @@ class _ProfileSidebarPage extends ConsumerWidget {
     final level = profile?.level ?? 1;
     final totalXP = profile?.totalXP ?? 0;
     final progress = LevelSystem.levelProgress(totalXP);
-    final unlockedCount = profile?.unlockedBadgeIds.length ?? 0;
+    final unlockedIds = profile?.unlockedBadgeIds.toSet() ?? <String>{};
+    final unlockedCount = kAllBadges
+        .where((b) => unlockedIds.contains(b.id))
+        .map((b) => b.missionId)
+        .toSet()
+        .length;
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -97,14 +103,10 @@ class _ProfileSidebarPage extends ConsumerWidget {
                         radius: 26,
                         strokeWidth: 2.5,
                         child: photoUrl != null
-                            ? SizedBox(
-                                width: 52,
-                                height: 52,
-                                child: ClipOval(
-                                  child: SizedBox.square(
-                                    dimension: 52,
-                                    child: buildProfileImage(photoUrl, 52),
-                                  ),
+                            ? ClipOval(
+                                child: SizedBox.square(
+                                  dimension: 52,
+                                  child: buildProfileImage(photoUrl, 52),
                                 ),
                               )
                             : CircleAvatar(
@@ -237,7 +239,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
                 _MenuItem(
                   icon: Icons.military_tech_outlined,
                   title: 'Meine Badges',
-                  trailing: '$unlockedCount/32',
+                  trailing: '$unlockedCount/26',
                   badgeCount: newBadgeCount,
                   onTap: () {
                     ref.read(newBadgeCountProvider.notifier).clear();

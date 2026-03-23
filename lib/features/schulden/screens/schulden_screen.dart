@@ -11,6 +11,7 @@ import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/glow_icon.dart';
 import '../../../shared/widgets/currency_input_field.dart';
 import '../../../shared/widgets/shimmer_loading.dart';
+import '../../gamification/utils/gamification_trigger.dart';
 import '../../home/providers/home_providers.dart';
 import '../models/schuld.dart';
 
@@ -285,7 +286,10 @@ class _SchuldCard extends ConsumerWidget {
       ),
       onDismissed: (_) {
         HapticFeedback.mediumImpact();
-        ref.read(schuldenRepositoryProvider).delete(schuld.id);
+        final id = schuld.id;
+        final iOwe = schuld.iOwe;
+        ref.read(schuldenRepositoryProvider).delete(id);
+        if (iOwe) triggerGamificationOnDebtPaid(context, ref, id);
       },
       child: Card(
         child: InkWell(

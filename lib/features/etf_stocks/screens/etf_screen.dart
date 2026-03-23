@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../gamification/utils/gamification_trigger.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -619,6 +621,7 @@ class _EtfSheetState extends ConsumerState<_EtfSheet> {
           await showAddCelebration(context, celebType);
         }
       }
+      if (mounted) triggerGamificationOnSave(context, ref);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

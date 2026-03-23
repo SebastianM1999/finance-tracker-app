@@ -125,11 +125,6 @@ class _CategoryHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                category.emoji,
-                style: const TextStyle(fontSize: 22),
-              ),
-              const SizedBox(width: 10),
-              Text(
                 category.label,
                 style: const TextStyle(
                   fontSize: 18,

@@ -13,13 +13,21 @@ class GamificationOverlay {
 
   static final Queue<BadgeDefinition> _queue = Queue();
   static OverlayEntry? _current;
-  // Store OverlayState (not BuildContext) — never goes stale while app is alive.
   static OverlayState? _overlay;
 
-  /// Adds [badges] to the queue and starts showing if not already running.
+  static void registerOverlay(BuildContext context) {
+    _overlay ??= Overlay.of(context, rootOverlay: true);
+  }
+
   static void enqueue(BuildContext context, List<BadgeDefinition> badges) {
     if (badges.isEmpty) return;
     _overlay ??= Overlay.of(context, rootOverlay: true);
+    _queue.addAll(badges);
+    if (_current == null) _showNext();
+  }
+
+  static void enqueueFromOverlay(List<BadgeDefinition> badges) {
+    if (badges.isEmpty || _overlay == null) return;
     _queue.addAll(badges);
     if (_current == null) _showNext();
   }
@@ -30,20 +38,15 @@ class GamificationOverlay {
     late final OverlayEntry entry;
 
     entry = OverlayEntry(
-      builder: (_) => Material(
-        type: MaterialType.transparency,
-        child: _BadgeToastWidget(
-          badge: badge,
-          onDismiss: () {
-            // Post-frame removal avoids removing the entry mid-build/navigation
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              entry.remove();
-              _current = null;
-              Future.delayed(
-                const Duration(milliseconds: 180), _showNext);
-            });
-          },
-        ),
+      builder: (_) => _BadgeToastWidget(
+        badge: badge,
+        onDismiss: () {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            entry.remove();
+            _current = null;
+            Future.delayed(const Duration(milliseconds: 180), _showNext);
+          });
+        },
       ),
     );
 
@@ -58,7 +61,7 @@ class GamificationOverlay {
   }
 }
 
-// ── Toast widget ──────────────────────────────────────────────────────────────
+// ── Toast widget ───────────────────────────────────────────────────────────────
 
 class _BadgeToastWidget extends StatefulWidget {
   const _BadgeToastWidget({
@@ -89,7 +92,6 @@ class _BadgeToastWidgetState extends State<_BadgeToastWidget>
   void initState() {
     super.initState();
 
-    // Slide-in / slide-out
     _slideCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -98,10 +100,9 @@ class _BadgeToastWidgetState extends State<_BadgeToastWidget>
       begin: const Offset(0, -1.3),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOutBack));
-    _fadeAnim =
-        CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOut);
+    _fadeAnim = CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOut);
 
-    // One-shot shimmer sweep across the card
+    // One-shot shimmer sweep on entry
     _shimmerCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -110,20 +111,16 @@ class _BadgeToastWidgetState extends State<_BadgeToastWidget>
       CurvedAnimation(parent: _shimmerCtrl, curve: Curves.easeInOut),
     );
 
-    // Continuous sparkle pulse
+    // Continuous border sparkle pulse
     _sparkleCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
 
     _slideCtrl.forward();
-
-    // Shimmer fires once after slide-in settles
     Future.delayed(const Duration(milliseconds: 320), () {
       if (mounted) _shimmerCtrl.forward();
     });
-
-    // Auto-dismiss after 2.5 seconds
     Future.delayed(const Duration(milliseconds: 2500), _dismiss);
   }
 
@@ -149,206 +146,159 @@ class _BadgeToastWidgetState extends State<_BadgeToastWidget>
       color.withOpacity(0.13),
       const Color(0xFF12141A),
     );
+    final topPadding = MediaQuery.viewPaddingOf(context).top;
 
-    // View.of(context) reads the raw platform padding — not affected by
-    // Navigator consuming safe-area insets in the MediaQuery tree.
-    final view = View.of(context);
-    final statusBarHeight = view.padding.top / view.devicePixelRatio;
-
-    return Positioned(
-      top: statusBarHeight + 10,
-      left: 14,
-      right: 14,
-      child: SlideTransition(
-        position: _slideAnim,
-        child: FadeTransition(
-          opacity: _fadeAnim,
-          child: GestureDetector(
-            onTap: () {
-              _dismiss();
-              widget.onTap?.call();
-            },
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                children: [
-                  // ── Base card ──────────────────────────────────────────────
-                  Container(
-                    decoration: BoxDecoration(
-                      color: bgColor,
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(10, topPadding + 10, 10, 0),
+        child: SlideTransition(
+          position: _slideAnim,
+          child: FadeTransition(
+            opacity: _fadeAnim,
+            child: Material(
+              type: MaterialType.transparency,
+              child: GestureDetector(
+                onTap: () {
+                  _dismiss();
+                  widget.onTap?.call();
+                },
+                // Stack with Clip.none so border glow can bleed outside card bounds
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // ── Card content (clipped to rounded rect) ─────────────────
+                    ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withOpacity(0.32),
-                          blurRadius: 22,
-                          spreadRadius: 0,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                      child: Stack(
                         children: [
-                          // Tier color left bar
+                          // Base card
                           Container(
-                            width: 4,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  color,
-                                  color.withOpacity(0.5),
-                                ],
-                              ),
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(14),
-                                bottomLeft: Radius.circular(14),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(width: 12),
-
-                          // Badge image
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: BadgeImage(
-                              missionId: widget.badge.missionId,
-                              tier: tier,
-                              fallbackEmoji: widget.badge.category.emoji,
-                              size: 56,
-                            ),
-                          ),
-
-                          const SizedBox(width: 12),
-
-                          // Text
-                          Expanded(
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
+                            color: bgColor,
+                            child: IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 7, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: color.withOpacity(0.18),
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          tier.label.toUpperCase(),
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w800,
-                                            color: color,
-                                            letterSpacing: 1.2,
+                                  const SizedBox(width: 14),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    child: BadgeImage(
+                                      missionId: widget.badge.missionId,
+                                      tier: tier,
+                                      fallbackEmoji:
+                                          widget.badge.category.emoji,
+                                      size: 56,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Badge freigeschaltet!',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: color.withOpacity(0.85),
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
-                                        ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            widget.badge.name,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w800,
+                                              height: 1.1,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '+${widget.badge.xpReward} XP',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.white
+                                                  .withOpacity(0.4),
+                                              fontWeight: FontWeight.w500,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Badge freigeschaltet!',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: color.withOpacity(0.85),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    widget.badge.name,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      height: 1.1,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '+${widget.badge.xpReward} XP',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.white.withOpacity(0.4),
-                                      fontWeight: FontWeight.w500,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
+                                  const SizedBox(width: 14),
                                 ],
                               ),
                             ),
                           ),
 
-                          const SizedBox(width: 14),
+                          // Static gloss (top-left corner)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white.withOpacity(0.09),
+                                      Colors.white.withOpacity(0.02),
+                                      Colors.transparent,
+                                    ],
+                                    stops: const [0.0, 0.3, 0.7],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          // One-shot shimmer sweep on entry
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: AnimatedBuilder(
+                                animation: _shimmerAnim,
+                                builder: (_, __) => CustomPaint(
+                                  painter: _ShimmerPainter(
+                                    progress: _shimmerAnim.value,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ),
 
-                  // ── Static gloss highlight (top-left corner) ───────────────
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.white.withOpacity(0.10),
-                              Colors.white.withOpacity(0.03),
-                              Colors.transparent,
-                            ],
-                            stops: const [0.0, 0.3, 0.7],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // ── Animated shimmer sweep ─────────────────────────────────
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: AnimatedBuilder(
-                        animation: _shimmerAnim,
-                        builder: (_, __) {
-                          return CustomPaint(
-                            painter: _ShimmerPainter(
-                              progress: _shimmerAnim.value,
-                              color: Colors.white,
+                    // ── Tier border (outside clip, can glow beyond card edge) ──
+                    Positioned(
+                      left: -8,
+                      right: -8,
+                      top: -8,
+                      bottom: -8,
+                      child: IgnorePointer(
+                        child: AnimatedBuilder(
+                          animation: _sparkleCtrl,
+                          builder: (_, __) => CustomPaint(
+                            painter: _BadgeBorderPainter(
+                              tier: tier,
+                              sparklePulse: _sparkleCtrl.value,
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-
-                  // ── Sparkles across the full card ──────────────────────────
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: AnimatedBuilder(
-                        animation: _sparkleCtrl,
-                        builder: (_, __) => CustomPaint(
-                          painter: _CardSparklePainter(
-                            progress: _sparkleCtrl.value,
-                            color: color,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -358,107 +308,257 @@ class _BadgeToastWidgetState extends State<_BadgeToastWidget>
   }
 }
 
-// ── Full-card sparkle painter ─────────────────────────────────────────────────
+// ── Border painter ─────────────────────────────────────────────────────────────
 
-/// Draws multiple 4-point stars scattered across the card, each with its own
-/// phase offset so they twinkle independently.
-class _CardSparklePainter extends CustomPainter {
-  const _CardSparklePainter({required this.progress, required this.color});
-  final double progress; // 0.0–1.0 from the repeating sparkle controller
-  final Color color;
+class _BadgeBorderPainter extends CustomPainter {
+  const _BadgeBorderPainter({
+    required this.tier,
+    required this.sparklePulse,
+  });
 
-  // (relX, relY, phase, size) — relative to card dimensions
-  static const _points = [
-    (0.08, 0.18, 0.0,  8.0),
-    (0.92, 0.22, 0.3,  7.0),
-    (0.5,  0.12, 0.55, 6.0),
-    (0.78, 0.80, 0.15, 9.0),
-    (0.18, 0.75, 0.45, 7.0),
-    (0.62, 0.55, 0.7,  5.0),
-    (0.35, 0.35, 0.85, 6.0),
-    (0.88, 0.50, 0.25, 5.0),
-  ];
+  final GamificationTier tier;
+  final double sparklePulse; // 0.0–1.0
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (final (rx, ry, phase, r) in _points) {
-      final t = ((progress + phase) % 1.0);
-      final opacity = (math.sin(t * math.pi)).clamp(0.0, 1.0);
-      if (opacity < 0.02) continue;
+  // 8 px inset = the Positioned(-8,-8,-8,-8) offset, so border aligns to card edge
+  static const _inset = 8.0;
+  static const _cornerRadius = Radius.circular(16);
 
-      final cx = rx * size.width;
-      final cy = ry * size.height;
-      _drawStar(canvas, cx, cy, r * opacity, color.withOpacity(opacity * 0.9));
+  List<Color> get _gradientColors {
+    switch (tier) {
+      case GamificationTier.bronze:
+        return const [
+          Color(0xFF5C2700),
+          Color(0xFFCD7F32),
+          Color(0xFFFF9B3C),
+          Color(0xFFFFD090),
+          Color(0xFFFF9B3C),
+          Color(0xFFCD7F32),
+          Color(0xFF5C2700),
+        ];
+      case GamificationTier.silver:
+        return const [
+          Color(0xFF4A5A6A),
+          Color(0xFF9AAABB),
+          Color(0xFFD8E8F0),
+          Color(0xFFFFFFFF),
+          Color(0xFFD8E8F0),
+          Color(0xFF9AAABB),
+          Color(0xFF4A5A6A),
+        ];
+      case GamificationTier.gold:
+        return const [
+          Color(0xFF4A2800),
+          Color(0xFFB8860B),
+          Color(0xFFD4A017),
+          Color(0xFFFFF0A0),
+          Color(0xFFD4A017),
+          Color(0xFFB8860B),
+          Color(0xFF4A2800),
+        ];
+      case GamificationTier.diamond:
+        return const [
+          Color(0xFF001A3A),
+          Color(0xFF0077BB),
+          Color(0xFF00CFFF),
+          Color(0xFFAAEEFF),
+          Color(0xFF00CFFF),
+          Color(0xFF0077BB),
+          Color(0xFF001A3A),
+        ];
     }
   }
 
-  void _drawStar(Canvas canvas, double cx, double cy, double r, Color c) {
-    final paint = Paint()
-      ..color = c
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5);
+  Color get _glowColor {
+    switch (tier) {
+      case GamificationTier.bronze:
+        return const Color(0xFFFF9B3C);
+      case GamificationTier.silver:
+        return const Color(0xFFB8C8D8);
+      case GamificationTier.gold:
+        return const Color(0xFFD4A017);
+      case GamificationTier.diamond:
+        return const Color(0xFF00CFFF);
+    }
+  }
 
+  Color get _shineColor {
+    switch (tier) {
+      case GamificationTier.bronze:
+        return const Color(0xFFFFD090);
+      case GamificationTier.silver:
+        return Colors.white;
+      case GamificationTier.gold:
+        return const Color(0xFFFFF0A0);
+      case GamificationTier.diamond:
+        return const Color(0xFFCCF5FF);
+    }
+  }
+
+  bool get _isAnimated =>
+      tier == GamificationTier.gold || tier == GamificationTier.diamond;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = RRect.fromLTRBR(
+      _inset,
+      _inset,
+      size.width - _inset,
+      size.height - _inset,
+      _cornerRadius,
+    );
+    final innerRect = Offset(_inset, _inset) &
+        Size(size.width - _inset * 2, size.height - _inset * 2);
+
+    _drawGlow(canvas, rect);
+    _drawBorder(canvas, rect, innerRect);
+    _drawShineSegment(canvas, rect);
+    _drawCornerSparkle(canvas, rect);
+  }
+
+  void _drawGlow(Canvas canvas, RRect rect) {
+    final opacity = _isAnimated ? 0.28 + 0.26 * sparklePulse : 0.28;
+    canvas.drawRRect(
+      rect,
+      Paint()
+        ..color = _glowColor.withOpacity(opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 12
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+  }
+
+  void _drawBorder(Canvas canvas, RRect rect, Rect innerRect) {
+    // Diagonal gradient: bright top-left → dark bottom-right (metallic look)
+    canvas.drawRRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: _gradientColors,
+        ).createShader(innerRect)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6,
+    );
+
+    // Subtle inner edge highlight line
+    canvas.drawRRect(
+      RRect.fromLTRBR(
+        _inset + 1,
+        _inset + 1,
+        rect.right - 1,
+        rect.bottom - 1,
+        const Radius.circular(15),
+      ),
+      Paint()
+        ..color = Colors.white.withOpacity(0.08)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8,
+    );
+  }
+
+  void _drawShineSegment(Canvas canvas, RRect rect) {
+    // Bright segment along the top edge (10 o'clock → 2 o'clock feel)
+    final opacity = _isAnimated ? 0.50 + 0.28 * sparklePulse : 0.60;
+    final left = rect.left + (rect.width * 0.12);
+    final right = rect.left + (rect.width * 0.60);
+    final top = rect.top;
+
+    canvas.drawLine(
+      Offset(left, top),
+      Offset(right, top),
+      Paint()
+        ..color = _shineColor.withOpacity(opacity)
+        ..strokeWidth = 1.6
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2),
+    );
+  }
+
+  void _drawCornerSparkle(Canvas canvas, RRect rect) {
+    // Top-right corner of the card border
+    final sx = rect.right - 6;
+    final sy = rect.top + 6;
+
+    final pulse = _isAnimated ? 0.60 + 0.40 * sparklePulse : 1.0;
+    final starR = 4.8 * pulse;
+
+    // Glow halo
+    canvas.drawCircle(
+      Offset(sx, sy),
+      starR * 2.2,
+      Paint()
+        ..color = _shineColor.withOpacity(0.28 * pulse)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+
+    // 4-point cross sparkle
+    _drawCross(canvas, sx, sy, starR, _shineColor.withOpacity(0.92 * pulse));
+
+    // White centre dot
+    canvas.drawCircle(
+      Offset(sx, sy),
+      starR * 0.24,
+      Paint()..color = Colors.white.withOpacity(0.95 * pulse),
+    );
+  }
+
+  void _drawCross(
+      Canvas canvas, double cx, double cy, double r, Color color) {
     final path = Path();
     for (int i = 0; i < 8; i++) {
-      final angle = (i * math.pi / 4) - math.pi / 2;
-      final radius = i.isEven ? r : r * 0.35;
-      final x = cx + radius * math.cos(angle);
-      final y = cy + radius * math.sin(angle);
+      final a = (i * math.pi / 4) - math.pi / 2;
+      final len = i.isEven ? r : r * 0.22;
+      final x = cx + len * math.cos(a);
+      final y = cy + len * math.sin(a);
       i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
     }
     path.close();
-    canvas.drawPath(path, paint);
-    canvas.drawCircle(
-      Offset(cx, cy),
-      r * 0.22,
-      Paint()..color = Colors.white.withOpacity(0.9 * (c.opacity)),
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.8),
     );
   }
 
   @override
-  bool shouldRepaint(_CardSparklePainter old) =>
-      old.progress != progress || old.color != color;
+  bool shouldRepaint(_BadgeBorderPainter old) =>
+      old.tier != tier || old.sparklePulse != sparklePulse;
 }
 
-// ── Shimmer sweep painter ─────────────────────────────────────────────────────
+// ── Entry shimmer sweep ────────────────────────────────────────────────────────
 
 class _ShimmerPainter extends CustomPainter {
-  const _ShimmerPainter({required this.progress, required this.color});
-  final double progress; // -0.4 → 1.4 (normalized to card width)
-  final Color color;
+  const _ShimmerPainter({required this.progress});
+  final double progress; // -0.4 → 1.4
 
   @override
   void paint(Canvas canvas, Size size) {
-    // progress is outside [0,1] → nothing to draw
     if (progress < -0.35 || progress > 1.35) return;
 
-    final w = size.width;
-    final h = size.height;
+    final cx = progress * size.width;
+    const hw = 36.0;
 
-    // Diagonal sweep: a narrow band tilted ~30°
-    final cx = progress * w;
-    const halfWidth = 36.0;
-
-    final paint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          Colors.transparent,
-          color.withOpacity(0.13),
-          color.withOpacity(0.20),
-          color.withOpacity(0.13),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
-      ).createShader(Rect.fromLTWH(cx - halfWidth, 0, halfWidth * 2, h));
-
-    // Slight diagonal: top edge is cx-10, bottom edge is cx+10
-    final path = Path()
-      ..moveTo(cx - halfWidth - 10, 0)
-      ..lineTo(cx + halfWidth - 10, 0)
-      ..lineTo(cx + halfWidth + 10, h)
-      ..lineTo(cx - halfWidth + 10, h)
-      ..close();
-
-    canvas.drawPath(path, paint);
+    canvas.drawPath(
+      Path()
+        ..moveTo(cx - hw - 10, 0)
+        ..lineTo(cx + hw - 10, 0)
+        ..lineTo(cx + hw + 10, size.height)
+        ..lineTo(cx - hw + 10, size.height)
+        ..close(),
+      Paint()
+        ..shader = LinearGradient(
+          colors: [
+            Colors.transparent,
+            Colors.white.withOpacity(0.12),
+            Colors.white.withOpacity(0.18),
+            Colors.white.withOpacity(0.12),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
+        ).createShader(Rect.fromLTWH(cx - hw, 0, hw * 2, size.height)),
+    );
   }
 
   @override

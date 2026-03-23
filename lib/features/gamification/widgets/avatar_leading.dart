@@ -7,10 +7,10 @@ import '../../auth/providers/auth_providers.dart';
 import '../models/gamification_models.dart';
 import '../providers/gamification_providers.dart';
 import '../screens/profile_sidebar.dart';
-import 'tier_ring.dart';
 
 /// Avatar in the AppBar leading/actions slot.
-/// Watches [levelUpTierProvider] — when set, pulses the ring and shows a "+1"
+/// No tier ring — ring is only shown in the profile sidebar.
+/// Watches [levelUpTierProvider] — when set, pulses the avatar and shows a "+1"
 /// badge in the tier colour for ~2.5 s, then clears the signal.
 class AvatarLeading extends ConsumerStatefulWidget {
   const AvatarLeading({super.key});
@@ -58,21 +58,14 @@ class _AvatarLeadingState extends ConsumerState<AvatarLeading>
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
-    final profile = ref.watch(gamificationProfileProvider).valueOrNull;
-    final tier = profile != null
-        ? LevelSystem.tierForLevel(profile.level)
-        : GamificationTier.bronze;
-    final level = profile?.level ?? 1;
     final newBadgeCount = ref.watch(newBadgeCountProvider);
 
     ref.listen<GamificationTier?>(levelUpTierProvider, (_, next) {
       if (next != null && _activeTier == null) _startPulse(next);
     });
 
-    const double ringRadius = 24;
-    const double ringStroke = 2.5;
-    const double ringSize = ringRadius * 2 + ringStroke * 2;
-    const double outerSize = ringSize + 10;
+    const double avatarRadius = 18;
+    const double outerSize = avatarRadius * 2 + 16;
 
     return Center(
       child: SizedBox(
@@ -82,30 +75,20 @@ class _AvatarLeadingState extends ConsumerState<AvatarLeading>
           children: [
             Positioned.fill(
               child: Center(
-                child: SizedBox(
-                  width: ringSize,
-                  height: ringSize,
-                  child: Material(
-                    color: Colors.transparent,
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      onTap: () => showProfileSidebar(context),
-                      customBorder: const CircleBorder(),
-                      child: IgnorePointer(
-                        child: AnimatedBuilder(
-                          animation: _scaleAnim,
-                          builder: (_, child) => Transform.scale(
-                            scale: _scaleAnim.value,
-                            child: child,
-                          ),
-                          child: TierRing(
-                            tier: tier,
-                            level: level,
-                            radius: ringRadius,
-                            strokeWidth: ringStroke,
-                            child: _UserAvatar(user: user),
-                          ),
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: () => showProfileSidebar(context),
+                    customBorder: const CircleBorder(),
+                    child: IgnorePointer(
+                      child: AnimatedBuilder(
+                        animation: _scaleAnim,
+                        builder: (_, child) => Transform.scale(
+                          scale: _scaleAnim.value,
+                          child: child,
                         ),
+                        child: _UserAvatar(user: user, radius: avatarRadius),
                       ),
                     ),
                   ),
@@ -184,8 +167,9 @@ class _AvatarLeadingState extends ConsumerState<AvatarLeading>
 }
 
 class _UserAvatar extends StatelessWidget {
-  const _UserAvatar({required this.user});
+  const _UserAvatar({required this.user, required this.radius});
   final dynamic user;
+  final double radius;
 
   @override
   Widget build(BuildContext context) {
@@ -196,20 +180,20 @@ class _UserAvatar extends StatelessWidget {
     if (photoUrl != null) {
       return ClipOval(
         child: SizedBox.square(
-          dimension: 48,
-          child: buildProfileImage(photoUrl, 48),
+          dimension: radius * 2,
+          child: buildProfileImage(photoUrl, radius * 2),
         ),
       );
     }
     return CircleAvatar(
-      radius: 24,
+      radius: radius,
       backgroundColor: const Color(0xFF1E3A5F),
       child: Text(
         initial,
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w700,
-          fontSize: 18,
+          fontSize: radius * 0.75,
         ),
       ),
     );

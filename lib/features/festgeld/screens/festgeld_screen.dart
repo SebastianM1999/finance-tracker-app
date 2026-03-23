@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+
+import '../../gamification/utils/gamification_trigger.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -326,7 +328,9 @@ class _FestgeldCard extends ConsumerWidget {
                           children: [
                             Text(
                               '${DateFormatter.format(item.startDate)} – ${DateFormatter.format(item.endDate)}',
-                              style: theme.textTheme.bodySmall,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
                             ),
                             if (statusColor != null)
                               Container(
@@ -610,6 +614,7 @@ class _FestgeldSheetState extends ConsumerState<_FestgeldSheet> {
         );
       }
 
+      if (mounted) triggerGamificationOnSave(context, ref);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

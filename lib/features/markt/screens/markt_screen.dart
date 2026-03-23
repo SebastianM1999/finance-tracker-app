@@ -356,7 +356,7 @@ class _MoversList extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
           child: Text(subtitle,
               style: const TextStyle(
-                  color: Colors.white38, fontSize: 11)),
+                  color: Colors.white54, fontSize: 11)),
         ),
         ...items.map((m) => _MoverTile(mover: m)),
       ],

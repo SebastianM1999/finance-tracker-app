@@ -4,22 +4,39 @@ import 'package:flutter/material.dart';
 class XPFloatAnimation {
   XPFloatAnimation._();
 
+  // Stored root overlay — set once from any live context and reused app-wide.
+  static OverlayState? _overlay;
+
+  /// Register (or refresh) the root overlay reference from any mounted context.
+  static void registerOverlay(BuildContext context) {
+    _overlay ??= Overlay.of(context, rootOverlay: true);
+  }
+
   static void show(BuildContext context, int xp) {
     if (xp <= 0) return;
+    registerOverlay(context);
+    _showOnOverlay(xp);
+  }
 
-    final overlay = Overlay.of(context, rootOverlay: true);
+  static void showFromOverlay(int xp) {
+    if (xp <= 0 || _overlay == null) return;
+    _showOnOverlay(xp);
+  }
+
+  static void _showOnOverlay(int xp) {
+    final overlay = _overlay;
+    if (overlay == null) return;
     late final OverlayEntry entry;
-
     entry = OverlayEntry(
       builder: (_) => Material(
         type: MaterialType.transparency,
         child: _XPFloatWidget(
           xp: xp,
-          onDone: entry.remove,
+          onDone: () => WidgetsBinding.instance
+              .addPostFrameCallback((_) => entry.remove()),
         ),
       ),
     );
-
     overlay.insert(entry);
   }
 }
@@ -59,7 +76,6 @@ class _XPFloatWidgetState extends State<_XPFloatWidget>
       ),
     );
 
-    // Pop in quickly, then hold
     _scaleAnim = Tween<double>(begin: 0.6, end: 1.0).animate(
       CurvedAnimation(
         parent: _ctrl,
@@ -81,7 +97,6 @@ class _XPFloatWidgetState extends State<_XPFloatWidget>
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    // Center of screen, slightly above middle
     final startX = screenSize.width / 2;
     const startY = 200.0;
 

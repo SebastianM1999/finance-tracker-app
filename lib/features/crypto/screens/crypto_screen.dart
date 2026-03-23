@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../gamification/utils/gamification_trigger.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -564,6 +566,7 @@ class _CryptoSheetState extends ConsumerState<_CryptoSheet> {
           await showAddCelebration(context, AddCelebrationType.crypto);
         }
       }
+      if (mounted) triggerGamificationOnSave(context, ref);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
