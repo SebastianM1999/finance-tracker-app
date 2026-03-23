@@ -12,6 +12,7 @@ class PhysicalAsset {
     this.notes,
     required this.createdAt,
     this.lastPriceUpdate,
+    this.colorValue,
   });
 
   final String id;
@@ -24,6 +25,7 @@ class PhysicalAsset {
   final String? notes;
   final DateTime createdAt;
   final DateTime? lastPriceUpdate;
+  final int? colorValue;
 
   double get pnlAbsolute => currentValue - buyPrice;
   double get pnlPercent => buyPrice == 0 ? 0 : (pnlAbsolute / buyPrice) * 100;
@@ -45,6 +47,7 @@ class PhysicalAsset {
       lastPriceUpdate: d['lastPriceUpdate'] != null
           ? (d['lastPriceUpdate'] as Timestamp).toDate()
           : null,
+      colorValue: d['colorValue'] as int?,
     );
   }
 
@@ -60,5 +63,6 @@ class PhysicalAsset {
         'lastPriceUpdate': lastPriceUpdate != null
             ? Timestamp.fromDate(lastPriceUpdate!)
             : null,
+        'colorValue': colorValue,
       };
 }

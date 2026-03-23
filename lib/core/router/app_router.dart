@@ -59,6 +59,16 @@ final routerProvider = Provider<GoRouter>((ref) {
               FadeTransition(opacity: animation, child: child),
         ),
       ),
+      GoRoute(
+        path: AppRoutes.settings,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const SettingsScreen(),
+          transitionDuration: const Duration(milliseconds: 280),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+      ),
       StatefulShellRoute(
         builder: (context, state, navigationShell) =>
             AppScaffold(navigationShell: navigationShell),
@@ -97,14 +107,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.debts,
                 builder: (context, state) => const SchuldenScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: AppRoutes.settings,
-                builder: (context, state) => const SettingsScreen(),
               ),
             ],
           ),

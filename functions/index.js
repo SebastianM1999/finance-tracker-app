@@ -1,11 +1,19 @@
 const { onRequest } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { initializeApp, getApps } = require("firebase-admin/app");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getMessaging } = require("firebase-admin/messaging");
 const axios = require("axios");
+
+if (getApps().length === 0) initializeApp();
 
 const FRANKFURTER_URL = "https://api.frankfurter.app/latest?from=USD&to=EUR";
 const BINANCE_BASE = "https://api.binance.com/api/v3/ticker/price";
 const YAHOO_BASE = "https://query1.finance.yahoo.com/v8/finance/chart";
 const YAHOO2_BASE = "https://query2.finance.yahoo.com/v8/finance/chart";
 const YAHOO_SEARCH_BASE = "https://query1.finance.yahoo.com/v1/finance/search";
+const YAHOO_SCREENER_BASE = "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved";
+const YAHOO_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart";
 const STOOQ_BASE = "https://stooq.com/q/l/";
 const STOCKPRICES_BASE = "https://stockprices.dev/api";
 const COINGECKO_SEARCH = "https://api.coingecko.com/api/v3/search";
@@ -112,6 +120,130 @@ async function stockpricesPrice(ticker, isEtf) {
     const rate = await usdToEur();
     if (!rate) return null;
     return { price: usdPrice * rate, source: "stockprices.dev" };
+  } catch { return null; }
+}
+
+// ── Market movers helpers ─────────────────────────────────────────────────────
+
+const YAHOO_HEADERS = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", Accept: "application/json" };
+const YAHOO_QUOTE_BASE = "https://query1.finance.yahoo.com/v7/finance/quote";
+const YAHOO_TRENDING_BASE = "https://query1.finance.yahoo.com/v1/finance/trending";
+
+const INDEX_SYMBOLS = ["^GDAXI", "^GSPC", "^IXIC", "^DJI", "^STOXX50E"];
+const INDEX_NAMES = {
+  "^GDAXI": "DAX", "^GSPC": "S&P 500", "^IXIC": "Nasdaq",
+  "^DJI": "Dow Jones", "^STOXX50E": "STOXX 50",
+};
+
+// Single batch call for many symbols → much lighter than individual chart calls
+async function batchQuote(symbols) {
+  try {
+    const res = await axios.get(
+      `${YAHOO_QUOTE_BASE}?symbols=${symbols.join(",")}`,
+      { headers: YAHOO_HEADERS, timeout: 12000 }
+    );
+    return res.data?.quoteResponse?.result ?? [];
+  } catch { return []; }
+}
+
+function quoteToMover(q) {
+  return {
+    symbol: q.symbol,
+    name: q.shortName || q.longName || q.symbol,
+    price: parseFloat((q.regularMarketPrice ?? 0).toFixed(2)),
+    changePct: parseFloat((q.regularMarketChangePercent ?? 0).toFixed(2)),
+    change: parseFloat((q.regularMarketChange ?? 0).toFixed(4)),
+    currency: q.currency ?? "USD",
+    exchange: q.fullExchangeName || q.exchange || "",
+    quoteType: q.quoteType || "EQUITY",
+  };
+}
+
+// Curated universe of major global stocks for weekly performance tracking
+const STOCK_UNIVERSE = [
+  // US mega caps
+  "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO", "JPM", "V",
+  // US large caps
+  "MA", "UNH", "HD", "XOM", "COST", "NFLX", "AMD", "CRM", "NOW", "ADBE",
+  // Growth / trending
+  "PLTR", "HOOD", "COIN", "MSTR", "MU", "QCOM", "INTC", "UBER", "SHOP", "SQ",
+  // European stocks (XETRA)
+  "SAP.DE", "SIE.DE", "BMW.DE", "MBG.DE", "ALV.DE", "DTE.DE", "BAS.DE", "ADS.DE",
+  // Global
+  "ASML", "NVO", "TSM",
+];
+
+// Curated universe of major global ETFs for weekly performance tracking
+const ETF_UNIVERSE = [
+  // US broad market
+  "SPY", "QQQ", "IWM", "DIA", "VTI", "VT",
+  // US sectors
+  "XLK", "XLF", "XLV", "XLE", "XLI", "SOXX", "ARKK", "VGT",
+  // Bonds & commodities
+  "GLD", "IAU", "TLT", "LQD", "HYG", "SLV",
+  // Europe-listed (XETRA / Euronext)
+  "VWCE.DE", "IWDA.AS", "EUNL.DE", "EXXT.DE", "XDWI.DE", "DBXD.DE", "IQQW.DE",
+  // London
+  "CSPX.L", "SWRD.L", "VUSA.L", "VUAA.L", "IUSA.L",
+  // EM / international
+  "EEM", "EFA", "VWO", "IEMG",
+];
+
+// Generic 5-day weekly mover — works for both stocks and ETFs.
+// USD prices are converted to EUR so the app always displays in €.
+async function weeklyMover(ticker, quoteType) {
+  try {
+    const res = await axios.get(
+      `${YAHOO_CHART_BASE}/${encodeURIComponent(ticker)}?range=5d&interval=1d`,
+      { headers: YAHOO_HEADERS, timeout: 8000 }
+    );
+    const result = res.data?.chart?.result?.[0];
+    if (!result) return null;
+    const closes = result.indicators?.quote?.[0]?.close?.filter((v) => v != null);
+    if (!closes || closes.length < 2) return null;
+    const first = closes[0];
+    const last = closes[closes.length - 1];
+    const changePct = ((last - first) / first) * 100;
+    const meta = result.meta;
+    const rawCurrency = (meta.currency ?? "USD").toUpperCase();
+
+    let price = last;
+    let currency = rawCurrency;
+    if (rawCurrency === "USD") {
+      const rate = await usdToEur();
+      if (rate) { price = last * rate; currency = "EUR"; }
+    }
+
+    return {
+      symbol: meta.symbol ?? ticker,
+      name: meta.longName || meta.shortName || ticker,
+      price: parseFloat(price.toFixed(2)),
+      changePct: parseFloat(changePct.toFixed(2)),
+      change: parseFloat((last - first).toFixed(4)),
+      currency,
+      exchange: meta.exchangeName ?? "",
+      quoteType,
+    };
+  } catch { return null; }
+}
+
+// Daily quote for indices — uses today's regularMarketChangePercent from chart
+// meta so the % matches what users see on Google Finance / news.
+async function dailyIndex(ticker) {
+  try {
+    const res = await axios.get(
+      `${YAHOO_CHART_BASE}/${encodeURIComponent(ticker)}?range=1d&interval=1d`,
+      { headers: YAHOO_HEADERS, timeout: 8000 }
+    );
+    const meta = res.data?.chart?.result?.[0]?.meta;
+    if (!meta?.regularMarketPrice) return null;
+    return {
+      symbol: meta.symbol ?? ticker,
+      name: INDEX_NAMES[meta.symbol ?? ticker] || meta.shortName || ticker,
+      value: parseFloat((meta.regularMarketPrice ?? 0).toFixed(2)),
+      changePct: parseFloat((meta.regularMarketChangePercent ?? 0).toFixed(2)),
+      change: parseFloat((meta.regularMarketChange ?? 0).toFixed(2)),
+    };
   } catch { return null; }
 }
 
@@ -228,5 +360,191 @@ exports.fetchPrice = onRequest(
       }
 
       res.status(400).json({ error: "Invalid type" });
+  }
+);
+
+// ── getMarketMovers ───────────────────────────────────────────────────────────
+// Returns indices, weekly top stocks/ETFs, trending tickers, most actives.
+//
+// Strategy: use the chart API (/v8/finance/chart) for everything except the
+// screener. The /v7/finance/quote batch endpoint has been rate-limited by
+// Yahoo Finance and returns empty results — skip it entirely.
+//   Phase 1 — curated stock/ETF/index lists + trending/actives in parallel (37 calls)
+//   Phase 2 — weeklyMover for trending symbols (12 calls)
+
+// Smaller curated lists fed directly into weeklyMover (chart API, reliably works)
+const STOCK_LIST = [
+  "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "NFLX",
+  "AMD", "PLTR", "COIN", "JPM", "SAP.DE", "ASML", "NVO",
+];
+const ETF_LIST = [
+  "SPY", "QQQ", "SOXX", "ARKK", "GLD", "VGT", "XLK", "TLT",
+  "VWCE.DE", "IWDA.AS", "EUNL.DE", "XDWI.DE", "EEM", "CSPX.L", "VTI",
+];
+
+exports.getMarketMovers = onRequest(
+  { region: "us-central1", cors: true, timeoutSeconds: 60 },
+  async (req, res) => {
+    try {
+      _cachedEurRate = null;
+
+      // ── Phase 1: all calls in parallel ───────────────────────────────────
+      const [indexWeekly, stockWeekly, etfWeekly, trendingRaw, activesRaw] = await Promise.all([
+        // Indices: daily % (today's change — matches Google Finance / news)
+        Promise.all(INDEX_SYMBOLS.map((s) => dailyIndex(s))),
+        // Stocks: direct weeklyMover on curated list
+        Promise.all(STOCK_LIST.map((s) => weeklyMover(s, "EQUITY"))),
+        // ETFs: direct weeklyMover on curated list
+        Promise.all(ETF_LIST.map((s) => weeklyMover(s, "ETF"))),
+        // Trending tickers (symbols only, prices fetched in Phase 2)
+        axios.get(`${YAHOO_TRENDING_BASE}/US`, { headers: YAHOO_HEADERS, timeout: 8000 })
+          .then((r) => r.data?.finance?.result?.[0]?.quotes ?? [])
+          .catch(() => []),
+        // Most actives screener (working endpoint)
+        axios.get(YAHOO_SCREENER_BASE, {
+          params: { scrIds: "most_actives", count: 10, formatted: false },
+          headers: YAHOO_HEADERS, timeout: 10000,
+        }).then((r) => r.data?.finance?.result?.[0]?.quotes ?? []).catch(() => []),
+      ]);
+
+      // ── Indices (dailyIndex already returns the right shape) ─────────────
+      const indices = indexWeekly.filter(Boolean);
+
+      const stocks = stockWeekly.filter(Boolean)
+        .sort((a, b) => b.changePct - a.changePct).slice(0, 10);
+      const etfs = etfWeekly.filter(Boolean)
+        .sort((a, b) => b.changePct - a.changePct).slice(0, 10);
+
+      // ── Trending: use chart API for prices (same as stocks/ETFs) ─────────
+      const trendingSymbols = trendingRaw.slice(0, 12).map((q) => q.symbol);
+      const trendingResults = trendingSymbols.length
+        ? await Promise.all(trendingSymbols.map((s) => weeklyMover(s, "EQUITY")))
+        : [];
+      const trending = trendingResults.filter(Boolean).slice(0, 10);
+
+      // ── Most actives ──────────────────────────────────────────────────────
+      const actives = activesRaw
+        .filter((q) => q.regularMarketPrice)
+        .slice(0, 10).map(quoteToMover);
+
+      res.json({ indices, stocks, etfs, trending, actives, updatedAt: new Date().toISOString() });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  }
+);
+
+// ── watchlistAlerts ───────────────────────────────────────────────────────────
+// Runs every 15 minutes. Checks all PRO users' watchlist targets, fetches
+// deduplicated prices, sends FCM push when a target is reached.
+
+async function _fetchSymbolPrice(symbol, type) {
+  try {
+    if (type === "crypto") {
+      const eurPrice = await binancePrice(`${symbol}EUR`);
+      if (eurPrice !== null) return eurPrice;
+      const usdtPrice = await binancePrice(`${symbol}USDT`);
+      if (usdtPrice !== null) {
+        const rate = await usdToEur();
+        if (rate) return usdtPrice * rate;
+      }
+      const cg = await coingeckoPrice(symbol);
+      return cg?.price ?? null;
+    } else {
+      // stock or etf — try Yahoo query1, then query2
+      let result = await yahooPrice(symbol);
+      if (result) return result.price;
+      result = await yahooPrice(symbol, YAHOO2_BASE);
+      return result?.price ?? null;
+    }
+  } catch { return null; }
+}
+
+function _fmtPrice(p) {
+  if (p >= 1000) return `${(p / 1000).toFixed(1)}k€`;
+  if (p >= 1) return `${p.toFixed(2)}€`;
+  return `${p.toFixed(4)}€`;
+}
+
+exports.watchlistAlerts = onSchedule(
+  { schedule: "every 15 minutes", region: "us-central1", timeoutSeconds: 300 },
+  async () => {
+    _cachedEurRate = null; // reset per-run cache
+    const db = getFirestore();
+    const messaging = getMessaging();
+
+    // ── 1. Collect watchlist items for all PRO users that have unnotified targets
+    const usersSnap = await db.collection("users").get();
+    const allItems = [];
+
+    await Promise.all(usersSnap.docs.map(async (userDoc) => {
+      const userData = userDoc.data();
+      if (!userData.isPro || !userData.fcmToken) return;
+
+      const watchSnap = await db
+        .collection("users").doc(userDoc.id)
+        .collection("watchlist")
+        .where("targetPrice", "!=", null)
+        .get();
+
+      for (const itemDoc of watchSnap.docs) {
+        const d = itemDoc.data();
+        // Skip if already notified for this target
+        if (d.notifiedAt) continue;
+        if (!d.targetPrice) continue;
+        allItems.push({
+          uid: userDoc.id,
+          itemId: itemDoc.id,
+          symbol: d.symbol,
+          name: d.name || d.symbol,
+          type: d.type || "stock",
+          targetPrice: d.targetPrice,
+          fcmToken: userData.fcmToken,
+        });
+      }
+    }));
+
+    if (allItems.length === 0) return;
+
+    // ── 2. Fetch each unique symbol's price once (deduplication)
+    const uniqueSymbols = [...new Set(allItems.map((i) => i.symbol))];
+    const prices = {};
+
+    await Promise.all(uniqueSymbols.map(async (symbol) => {
+      const item = allItems.find((i) => i.symbol === symbol);
+      const price = await _fetchSymbolPrice(symbol, item.type);
+      if (price !== null) prices[symbol] = price;
+    }));
+
+    // ── 3. Check targets, send FCM, mark notifiedAt in batch
+    const batch = db.batch();
+    const sends = [];
+
+    for (const item of allItems) {
+      const price = prices[item.symbol];
+      if (price == null || price < item.targetPrice) continue;
+
+      // Send FCM push notification
+      sends.push(
+        messaging.send({
+          token: item.fcmToken,
+          notification: {
+            title: `Kursziel erreicht: ${item.symbol}`,
+            body: `${item.name} hat dein Ziel von ${_fmtPrice(item.targetPrice)} erreicht!`,
+          },
+          data: { type: "watchlist_alert", symbol: item.symbol },
+          android: { priority: "high" },
+          apns: { payload: { aps: { sound: "default" } } },
+        }).catch(() => { /* ignore bad/expired tokens */ })
+      );
+
+      // Mark as notified so we don't fire again
+      const ref = db
+        .collection("users").doc(item.uid)
+        .collection("watchlist").doc(item.itemId);
+      batch.update(ref, { notifiedAt: FieldValue.serverTimestamp() });
+    }
+
+    await Promise.all([...sends, batch.commit()]);
   }
 );

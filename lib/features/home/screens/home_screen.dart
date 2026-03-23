@@ -1,4 +1,3 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,17 +8,35 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
-import '../../../shared/widgets/profile_image_stub.dart'
-    if (dart.library.js_interop) '../../../shared/widgets/profile_image_web.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../festgeld/models/festgeld.dart';
+import '../../gamification/utils/gamification_trigger.dart';
+import '../../gamification/widgets/avatar_leading.dart';
 import '../../investments/screens/investments_screen.dart';
 import '../providers/home_providers.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
-  Future<void> _refresh(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _startupTriggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Delay to ensure the overlay is available and data streams are ready
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _startupTriggered) return;
+      _startupTriggered = true;
+      await triggerGamificationOnStartup(context, ref);
+    });
+  }
+
+  Future<void> _refresh(BuildContext context) async {
     final cryptoList = ref.read(cryptoStreamProvider).valueOrNull ?? [];
     final etfList = ref.read(etfStreamProvider).valueOrNull ?? [];
     final assetsList = ref.read(assetsStreamProvider).valueOrNull ?? [];
@@ -41,21 +58,27 @@ class HomeScreen extends ConsumerWidget {
         duration: const Duration(seconds: 3),
       ));
     }
+
+    if (context.mounted) {
+      await triggerGamificationOnRefresh(context, ref);
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () => _refresh(context, ref),
+        onRefresh: () => _refresh(context),
         child: CustomScrollView(
           slivers: [
             SliverAppBar(
               floating: true,
               toolbarHeight: 72,
+              leadingWidth: 72,
+              leading: const AvatarLeading(),
               title: Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Column(
@@ -65,17 +88,11 @@ class HomeScreen extends ConsumerWidget {
                       'Hallo, ${user?.displayName.split(' ').first ?? 'Nutzer'} 👋',
                       style: theme.textTheme.titleMedium,
                     ),
-                    Text('Schön dass du da bist!',
+                    Text('Schön, dass du da bist!',
                         style: theme.textTheme.bodyMedium),
                   ],
                 ),
               ),
-              actions: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 16, top: 12),
-                  child: _UserAvatar(user: user),
-                ),
-              ],
             ),
             SliverToBoxAdapter(
               child: Padding(
@@ -99,15 +116,6 @@ class HomeScreen extends ConsumerWidget {
                         .fadeIn(delay: 150.ms, duration: 300.ms),
                     const SizedBox(height: 10),
                     const _CategoryCards(),
-                    const SizedBox(height: 24),
-                    Text('Vermögensentwicklung',
-                            style: theme.textTheme.titleLarge)
-                        .animate()
-                        .fadeIn(delay: 400.ms, duration: 300.ms),
-                    const SizedBox(height: 12),
-                    const _MiniChart()
-                        .animate()
-                        .fadeIn(delay: 450.ms, duration: 300.ms),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -784,130 +792,3 @@ class _MaturityCard extends ConsumerWidget {
   }
 }
 
-// ── Mini Net Worth Chart (tappable → VerlaufScreen) ──────────────────────────
-
-class _MiniChart extends ConsumerWidget {
-  const _MiniChart();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final history = ref.watch(netWorthHistoryProvider).valueOrNull ?? [];
-
-    return GestureDetector(
-      onTap: () => context.push(AppRoutes.verlauf),
-      child: Container(
-        height: 180,
-        padding: const EdgeInsets.fromLTRB(8, 12, 12, 8),
-        decoration: BoxDecoration(
-          color: AppColors.darkSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.darkBorder),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 8, right: 4, bottom: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '1M',
-                    style: const TextStyle(
-                      color: AppColors.darkTextSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      const Text(
-                        'Verlauf ansehen',
-                        style: TextStyle(
-                          color: AppColors.darkPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(Icons.arrow_forward_ios,
-                          size: 10, color: AppColors.darkPrimary),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: history.length < 2
-                  ? const Center(
-                      child: Text(
-                        'Noch keine Verlaufsdaten',
-                        style: TextStyle(
-                            color: AppColors.darkTextSecondary, fontSize: 13),
-                      ),
-                    )
-                  : LineChart(
-                      LineChartData(
-                        gridData: const FlGridData(show: false),
-                        titlesData: const FlTitlesData(show: false),
-                        borderData: FlBorderData(show: false),
-                        lineTouchData: const LineTouchData(enabled: false),
-                        lineBarsData: [
-                          LineChartBarData(
-                            spots: history
-                                .asMap()
-                                .entries
-                                .map((e) => FlSpot(
-                                    e.key.toDouble(), e.value.totalNetWorth))
-                                .toList(),
-                            isCurved: true,
-                            color: AppColors.darkPrimary,
-                            barWidth: 2.5,
-                            dotData: const FlDotData(show: false),
-                            belowBarData: BarAreaData(
-                              show: true,
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  AppColors.darkPrimary.withValues(alpha: 0.3),
-                                  AppColors.darkPrimary.withValues(alpha: 0.0),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── User Avatar ───────────────────────────────────────────────────────────────
-
-class _UserAvatar extends StatelessWidget {
-  const _UserAvatar({required this.user});
-
-  final dynamic user;
-
-  @override
-  Widget build(BuildContext context) {
-    final photoUrl = user?.photoUrl as String?;
-    final initial =
-        (user?.displayName as String? ?? 'S').substring(0, 1).toUpperCase();
-
-    if (photoUrl != null) {
-      return ClipOval(child: buildProfileImage(photoUrl, 36));
-    }
-
-    return CircleAvatar(
-      radius: 18,
-      backgroundColor: AppColors.darkPrimary,
-      child: Text(initial,
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
-    );
-  }
-}

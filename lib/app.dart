@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -8,6 +9,7 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/providers/auth_providers.dart';
 import 'features/home/providers/home_providers.dart';
 import 'features/settings/providers/settings_providers.dart';
+import 'shared/services/fcm_service.dart';
 
 class FinTrackApp extends ConsumerWidget {
   const FinTrackApp({super.key});
@@ -19,7 +21,24 @@ class FinTrackApp extends ConsumerWidget {
 
     // Activate auto-save only when logged in
     final user = ref.watch(currentUserProvider);
-    if (user != null) ref.watch(autoSaveNetWorthProvider);
+    if (user != null) {
+      ref.watch(autoSaveNetWorthProvider);
+      // Initialize FCM and store device token for push notifications
+      FcmService.initializeForUser(user.uid);
+    } else {
+      FcmService.reset();
+    }
+
+    // Sync PRO status to Firestore so Cloud Functions can check it
+    ref.listen<bool>(isProProvider, (_, isPro) {
+      final uid = ref.read(currentUserProvider)?.uid;
+      if (uid != null) {
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .set({'isPro': isPro}, SetOptions(merge: true));
+      }
+    });
 
     final isDark = themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system &&

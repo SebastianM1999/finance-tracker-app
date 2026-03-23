@@ -15,6 +15,8 @@ class NotificationService {
 
   static const _channelId = 'festgeld_maturity';
   static const _channelName = 'Festgeld Fälligkeiten';
+  static const _watchlistChannelId = 'watchlist_alerts';
+  static const _watchlistChannelName = 'Kurs-Benachrichtigungen';
 
   /// Call once from main() before runApp().
   Future<void> initialize() async {
@@ -57,6 +59,17 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
+
+    const watchlistChannel = AndroidNotificationChannel(
+      _watchlistChannelId,
+      _watchlistChannelName,
+      description: 'Benachrichtigungen wenn dein Kursziel erreicht wird',
+      importance: Importance.high,
+    );
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(watchlistChannel);
 
     _initialized = true;
   }
@@ -111,6 +124,61 @@ class NotificationService {
     }
 
     return scheduledIds;
+  }
+
+  /// Show an immediate watchlist price alert notification.
+  Future<void> showWatchlistAlert({
+    required String symbol,
+    required String name,
+    required double currentPrice,
+    required double targetPrice,
+  }) async {
+    if (kIsWeb) return;
+    final notifEnabled = await areNotificationsEnabled();
+    if (!notifEnabled) return;
+    final id = 'watchlist_$symbol'.hashCode;
+    final priceStr = targetPrice >= 1000
+        ? '${(targetPrice / 1000).toStringAsFixed(1)}k€'
+        : '${targetPrice.toStringAsFixed(2)}€';
+    await _plugin.show(
+      id,
+      'Kursziel erreicht: $symbol',
+      '$name hat dein Ziel von $priceStr erreicht!',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _watchlistChannelId,
+          _watchlistChannelName,
+          importance: Importance.high,
+          priority: Priority.high,
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+    );
+  }
+
+  /// Show a raw push notification (used when FCM message arrives in foreground).
+  Future<void> showWatchlistAlertRaw({
+    required String title,
+    required String body,
+  }) async {
+    if (kIsWeb) return;
+    final id = title.hashCode ^ body.hashCode;
+    await _plugin.show(
+      id,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _watchlistChannelId,
+          _watchlistChannelName,
+          importance: Importance.high,
+          priority: Priority.high,
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+    );
   }
 
   /// Show an immediate test notification.

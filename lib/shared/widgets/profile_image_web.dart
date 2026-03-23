@@ -6,7 +6,7 @@ import 'package:web/web.dart' as web;
 final _registered = <String>{};
 
 Widget buildProfileImage(String photoUrl, double size) {
-  final viewType = 'profile-img-${photoUrl.hashCode}';
+  final viewType = 'profile-img-${photoUrl.hashCode}-${size.toInt()}';
 
   if (!_registered.contains(viewType)) {
     _registered.add(viewType);

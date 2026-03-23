@@ -14,6 +14,8 @@ import '../../../shared/widgets/profile_image_stub.dart'
     if (dart.library.js_interop) '../../../shared/widgets/profile_image_web.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../home/providers/home_providers.dart';
+import '../../gamification/providers/gamification_providers.dart';
+import '../../gamification/screens/profile_sidebar.dart';
 import '../providers/settings_providers.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -24,6 +26,7 @@ class SettingsScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final themeMode = ref.watch(themeModeProvider);
     final isDark = themeMode == ThemeMode.dark;
+    final gamificationEnabled = ref.watch(gamificationEnabledProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -64,6 +67,70 @@ class SettingsScreen extends ConsumerWidget {
               ),
               value: isDark,
               onChanged: (_) => ref.read(themeModeProvider.notifier).toggle(),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Gamification
+          _SectionHeader('Gamification'),
+          _SectionCard(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('XP & Abzeichen'),
+                  subtitle: const Text('Belohnungen für Finanzziele'),
+                  secondary: const Icon(Icons.emoji_events_outlined),
+                  value: gamificationEnabled,
+                  onChanged: (_) =>
+                      ref.read(gamificationEnabledProvider.notifier).toggle(),
+                ),
+                if (gamificationEnabled) ...[
+                  Divider(height: 1, color: theme.colorScheme.outline),
+                  ListTile(
+                    leading: const Icon(Icons.person_outlined),
+                    title: const Text('Profil & Fortschritt'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      final profile =
+                          ref.read(gamificationProfileProvider).valueOrNull;
+                      if (profile != null) {
+                        showProfileSidebar(context);
+                      }
+                    },
+                  ),
+                ],
+                Divider(height: 1, color: theme.colorScheme.outline),
+                ListTile(
+                  leading: const Icon(Icons.restart_alt,
+                      color: AppColors.darkSecondary),
+                  title: const Text('Fortschritt zurücksetzen [TEST]',
+                      style: TextStyle(color: AppColors.darkSecondary)),
+                  subtitle: const Text('Löscht XP, Badges & Abzeichen'),
+                  onTap: () => _resetGamification(context, ref),
+                ),
+                Divider(height: 1, color: theme.colorScheme.outline),
+                SwitchListTile(
+                  secondary: const Icon(Icons.workspace_premium_outlined,
+                      color: AppColors.darkSecondary),
+                  title: const Text('PRO Modus [TEST]',
+                      style: TextStyle(color: AppColors.darkSecondary)),
+                  subtitle: const Text('Schaltet PRO-Analysen frei'),
+                  value: ref.watch(isProProvider),
+                  onChanged: (_) => ref.read(isProProvider.notifier).toggle(),
+                ),
+                Divider(height: 1, color: theme.colorScheme.outline),
+                ListTile(
+                  leading: const Icon(Icons.notification_add_outlined,
+                      color: AppColors.darkSecondary),
+                  title: const Text('Badge-Indikator testen [TEST]',
+                      style: TextStyle(color: AppColors.darkSecondary)),
+                  subtitle: const Text('Zeigt +1 Indikator auf Avatar & Badges'),
+                  onTap: () {
+                    ref.read(newBadgeCountProvider.notifier).add(1);
+                    ref.read(homeTabBadgeCountProvider.notifier).add(1);
+                  },
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 20),
@@ -188,6 +255,30 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _resetGamification(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Fortschritt zurücksetzen',
+      message: 'Alle XP, Badges und Herausforderungen werden gelöscht. Fortfahren?',
+      confirmLabel: 'Zurücksetzen',
+    );
+    if (!confirmed) return;
+    try {
+      await ref.read(gamificationRepositoryProvider).resetAll();
+      ref.read(newBadgeCountProvider.notifier).clear();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gamification-Fortschritt zurückgesetzt')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Fehler: $e')));
+      }
+    }
   }
 
   Future<void> _exportJson(BuildContext context, WidgetRef ref) async {
