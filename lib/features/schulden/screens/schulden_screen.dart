@@ -24,7 +24,13 @@ class SchuldenScreen extends ConsumerWidget {
     final total = ref.watch(schuldenTotalProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Schulden')),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        automaticallyImplyLeading: false,
+        leading: const SizedBox.shrink(),
+        leadingWidth: 72,
+        title: const Text('Schulden'),
+      ),
       body: stream.when(
         loading: () => const ShimmerList(),
         error: (e, _) => Center(child: Text('Fehler: $e')),

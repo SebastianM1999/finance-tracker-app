@@ -24,7 +24,13 @@ class GiroScreen extends ConsumerWidget {
     final total = ref.watch(giroTotalProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Giro Konten')),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        automaticallyImplyLeading: false,
+        leading: const SizedBox.shrink(),
+        leadingWidth: 72,
+        title: const Text('Giro Konten'),
+      ),
       body: accounts.when(
         loading: () => const ShimmerList(),
         error: (e, _) => Center(child: Text('Fehler: $e')),

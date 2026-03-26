@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../crypto/screens/crypto_screen.dart';
 import '../../etf_stocks/screens/etf_screen.dart';
 import '../../festgeld/screens/festgeld_screen.dart';
-import '../../gamification/widgets/avatar_leading.dart';
 import '../../physical_assets/screens/assets_screen.dart';
 
 /// Set to the desired tab index before navigating to /investments.
@@ -49,7 +48,9 @@ class _InvestmentsScreenState extends ConsumerState<InvestmentsScreen>
 
     return Scaffold(
       appBar: AppBar(
-        leading: const AvatarLeading(),
+        toolbarHeight: 72,
+        automaticallyImplyLeading: false,
+        leading: const SizedBox.shrink(),
         leadingWidth: 72,
         title: const Text('Investments'),
         bottom: TabBar(

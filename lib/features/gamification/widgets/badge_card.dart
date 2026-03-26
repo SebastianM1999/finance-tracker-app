@@ -149,38 +149,31 @@ class _MissionCardState extends State<MissionCard>
     final isDiamond = highest.tier == GamificationTier.diamond;
     final isGold = highest.tier == GamificationTier.gold;
 
-    double pulse = 1.0;
-    if (isDiamond) {
-      pulse = 0.85 + 0.15 * math.sin(idleValue * 2 * math.pi);
-    } else if (isGold) {
-      pulse = 0.7 + 0.3 * math.sin(idleValue * 2 * math.pi);
-    }
+    // pulse: 0.0 → 1.0 → 0.0 per cycle (smooth sine, always positive)
+    final sinVal = (1.0 + math.sin(idleValue * 2 * math.pi)) / 2.0;
 
     Widget badgeWidget = BadgeImage(
       missionId: widget.mission.id,
       tier: highest.tier,
       fallbackEmoji: widget.mission.category.emoji,
       size: 86,
-      opacity: pulse,
     );
 
     if (isGold || isDiamond) {
+      // Background circle pulses in tier color; badge image stays static.
+      final bgAlpha = isGold
+          ? 0.12 + 0.22 * sinVal   // gold: 0.12 → 0.34
+          : 0.10 + 0.15 * sinVal;  // diamond: slightly subtler
+
       badgeWidget = Stack(
         alignment: Alignment.center,
         children: [
-          // Glow halo behind the badge
           Container(
-            width: 66,
-            height: 66,
+            width: 78,
+            height: 78,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: highest.tier.primaryColor.withOpacity(0.55 * pulse),
-                  blurRadius: 28,
-                  spreadRadius: 10,
-                ),
-              ],
+              color: highest.tier.primaryColor.withValues(alpha: bgAlpha),
             ),
           ),
           BadgeImage(
@@ -188,7 +181,6 @@ class _MissionCardState extends State<MissionCard>
             tier: highest.tier,
             fallbackEmoji: widget.mission.category.emoji,
             size: 86,
-            opacity: pulse,
           ),
         ],
       );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/gamification/providers/gamification_providers.dart';
+import '../../features/gamification/widgets/avatar_leading.dart';
 
 class AppScaffold extends ConsumerWidget {
   const AppScaffold({super.key, required this.navigationShell});
@@ -12,6 +13,7 @@ class AppScaffold extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final homeTabBadgeCount = ref.watch(homeTabBadgeCountProvider);
+    final topPadding = MediaQuery.viewPaddingOf(context).top;
 
     return PopScope(
       canPop: navigationShell.currentIndex == 0,
@@ -21,7 +23,19 @@ class AppScaffold extends ConsumerWidget {
         }
       },
       child: Scaffold(
-        body: navigationShell,
+        body: Stack(
+          children: [
+            navigationShell,
+            // Persistent avatar — single instance above all tab trees,
+            // never flashes or reloads when switching tabs.
+            Positioned(
+              top: topPadding,
+              left: 0,
+              height: 72,
+              child: const AvatarLeading(),
+            ),
+          ],
+        ),
         bottomNavigationBar: AppBottomNav(
           currentIndex: navigationShell.currentIndex,
           newBadgeCount: homeTabBadgeCount,

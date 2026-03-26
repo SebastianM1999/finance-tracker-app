@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -238,6 +239,31 @@ class _HistoryChart extends StatefulWidget {
 
 class _HistoryChartState extends State<_HistoryChart> {
   static final _axisDate = DateFormat('dd.MM.');
+  static final _scrubDateFmt = DateFormat('dd. MMM yyyy', 'de_DE');
+
+  int? _scrubIndex;
+
+  void _onChartTouch(FlTouchEvent event, LineTouchResponse? response, List<NetWorthSnapshot> history, BuildContext ctx) {
+    final spots = response?.lineBarSpots;
+    final idx = (spots != null && spots.isNotEmpty) ? spots.first.spotIndex : null;
+
+    if (event is FlPointerExitEvent || event is FlLongPressEnd || event is FlPanEndEvent) {
+      setState(() => _scrubIndex = null);
+      return;
+    }
+    if (event is FlTapUpEvent) {
+      setState(() => _scrubIndex = null);
+      if (idx != null) _showDetail(ctx, history[idx]);
+      return;
+    }
+    // Hover (web/desktop) + long press (mobile) + pan (mobile)
+    if (idx != null && _scrubIndex != idx) {
+      if (event is FlLongPressMoveUpdate || event is FlLongPressStart) {
+        HapticFeedback.selectionClick();
+      }
+      setState(() => _scrubIndex = idx);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -267,123 +293,159 @@ class _HistoryChartState extends State<_HistoryChart> {
         .map((e) => FlSpot(e.key.toDouble(), e.value.totalNetWorth))
         .toList();
 
-    final minY = history.map((s) => s.totalNetWorth).reduce((a, b) => a < b ? a : b);
-    final maxY = history.map((s) => s.totalNetWorth).reduce((a, b) => a > b ? a : b);
+    final minY = history
+        .map((s) => s.totalNetWorth)
+        .reduce((a, b) => a < b ? a : b);
+    final maxY = history
+        .map((s) => s.totalNetWorth)
+        .reduce((a, b) => a > b ? a : b);
     final padding = (maxY - minY) * 0.15;
 
     // Pick ~4 evenly spaced x-axis labels
     final step = (history.length / 4).ceil().clamp(1, history.length);
 
-    return GestureDetector(
-      child: Container(
-        height: 260,
-        padding: const EdgeInsets.fromLTRB(0, 16, 16, 8),
-        decoration: BoxDecoration(
-          color: AppColors.darkSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.darkBorder),
-        ),
-        child: LineChart(
-          LineChartData(
-            minY: minY - padding,
-            maxY: maxY + padding,
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              horizontalInterval: padding > 0 ? (maxY - minY + 2 * padding) / 4 : 1,
-              getDrawingHorizontalLine: (_) => FlLine(
-                color: AppColors.darkBorder,
-                strokeWidth: 0.8,
-              ),
-            ),
-            titlesData: FlTitlesData(
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 52,
-                  getTitlesWidget: (value, meta) => Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Text(
-                      _fmtY(value),
-                      style: const TextStyle(
-                        color: AppColors.darkTextSecondary,
-                        fontSize: 10,
+    final scrubSnap = _scrubIndex != null ? history[_scrubIndex!] : null;
+    final scrubPrev =
+        (_scrubIndex != null && _scrubIndex! > 0)
+            ? history[_scrubIndex! - 1]
+            : null;
+
+    return Stack(
+      children: [
+        Container(
+          height: 260,
+          padding: const EdgeInsets.fromLTRB(0, 16, 16, 8),
+          decoration: BoxDecoration(
+            color: AppColors.darkSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: LineChart(
+            LineChartData(
+                    minY: minY - padding,
+                    maxY: maxY + padding,
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      horizontalInterval: padding > 0
+                          ? (maxY - minY + 2 * padding) / 4
+                          : 1,
+                      getDrawingHorizontalLine: (_) => FlLine(
+                        color: AppColors.darkBorder,
+                        strokeWidth: 0.8,
                       ),
-                      textAlign: TextAlign.right,
                     ),
-                  ),
-                ),
-              ),
-              rightTitles: const AxisTitles(),
-              topTitles: const AxisTitles(),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  interval: step.toDouble(),
-                  getTitlesWidget: (value, meta) {
-                    final i = value.toInt();
-                    if (i < 0 || i >= history.length) {
-                      return const SizedBox.shrink();
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        _axisDate.format(history[i].recordedAt),
-                        style: const TextStyle(
-                          color: AppColors.darkTextSecondary,
-                          fontSize: 10,
+                    extraLinesData: scrubSnap != null
+                        ? ExtraLinesData(
+                            verticalLines: [
+                              VerticalLine(
+                                x: _scrubIndex!.toDouble(),
+                                color: Colors.white.withValues(alpha: 0.45),
+                                strokeWidth: 1.5,
+                                dashArray: [4, 4],
+                              ),
+                            ],
+                          )
+                        : null,
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 52,
+                          getTitlesWidget: (value, meta) => Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Text(
+                              _fmtY(value),
+                              style: const TextStyle(
+                                color: AppColors.darkTextSecondary,
+                                fontSize: 10,
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            borderData: FlBorderData(show: false),
-            lineTouchData: LineTouchData(
-              touchCallback: (event, response) {
-                if (event is FlTapUpEvent &&
-                    response?.lineBarSpots != null) {
-                  final idx = response!.lineBarSpots!.first.spotIndex;
-                  _showDetail(context, history[idx]);
-                }
-              },
-              touchTooltipData: LineTouchTooltipData(
-                getTooltipItems: (spots) => spots
-                    .map((s) => LineTooltipItem(
-                          CurrencyFormatter.formatCompact(s.y),
-                          const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                      rightTitles: const AxisTitles(),
+                      topTitles: const AxisTitles(),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          interval: step.toDouble(),
+                          getTitlesWidget: (value, meta) {
+                            final i = value.toInt();
+                            if (i < 0 || i >= history.length) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                _axisDate.format(history[i].recordedAt),
+                                style: const TextStyle(
+                                  color: AppColors.darkTextSecondary,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    lineTouchData: LineTouchData(
+                      handleBuiltInTouches: false,
+                      touchCallback: (event, response) =>
+                          _onChartTouch(event, response, history, context),
+                    ),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: spots,
+                        isCurved: true,
+                        color: AppColors.darkPrimary,
+                        barWidth: 2.5,
+                        dotData: FlDotData(
+                          show: scrubSnap != null,
+                          checkToShowDot: (spot, _) =>
+                              spot.x.round() == _scrubIndex,
+                          getDotPainter: (_, __, ___, ____) =>
+                              FlDotCirclePainter(
+                            radius: 4.5,
+                            color: AppColors.darkPrimary,
+                            strokeWidth: 2,
+                            strokeColor: Colors.white,
                           ),
-                        ))
-                    .toList(),
-              ),
-            ),
-            lineBarsData: [
-              LineChartBarData(
-                spots: spots,
-                isCurved: true,
-                color: AppColors.darkPrimary,
-                barWidth: 2.5,
-                dotData: const FlDotData(show: false),
-                belowBarData: BarAreaData(
-                  show: true,
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      AppColors.darkPrimary.withValues(alpha: 0.3),
-                      AppColors.darkPrimary.withValues(alpha: 0.0),
+                        ),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              AppColors.darkPrimary.withValues(alpha: 0.3),
+                              AppColors.darkPrimary.withValues(alpha: 0.0),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+
+              // Floating scrub info card
+              if (scrubSnap != null)
+                Positioned(
+                  top: 10,
+                  left: 56,
+                  right: 16,
+                  child: Center(
+                    child: _ScrubInfoCard(
+                      snapshot: scrubSnap,
+                      previous: scrubPrev,
+                      dateFmt: _scrubDateFmt,
+                    ),
+                  ),
+                ),
+      ],
     );
   }
 
@@ -393,6 +455,75 @@ class _HistoryChartState extends State<_HistoryChart> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _SnapshotDetailSheet(snapshot: snapshot),
+    );
+  }
+}
+
+// ── Scrub Info Card ───────────────────────────────────────────────────────────
+
+class _ScrubInfoCard extends StatelessWidget {
+  const _ScrubInfoCard({
+    required this.snapshot,
+    required this.previous,
+    required this.dateFmt,
+  });
+
+  final NetWorthSnapshot snapshot;
+  final NetWorthSnapshot? previous;
+  final DateFormat dateFmt;
+
+  @override
+  Widget build(BuildContext context) {
+    final change =
+        previous != null ? snapshot.totalNetWorth - previous!.totalNetWorth : null;
+    final isPos = change == null || change >= 0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.darkBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            dateFmt.format(snapshot.recordedAt),
+            style: const TextStyle(
+              color: AppColors.darkTextSecondary,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            CurrencyFormatter.format(snapshot.totalNetWorth),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (change != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              CurrencyFormatter.formatPnl(change),
+              style: TextStyle(
+                color: isPos ? AppColors.darkPositive : AppColors.darkSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

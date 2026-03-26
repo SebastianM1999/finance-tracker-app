@@ -11,7 +11,6 @@ import '../../../core/utils/date_formatter.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../festgeld/models/festgeld.dart';
 import '../../gamification/utils/gamification_trigger.dart';
-import '../../gamification/widgets/avatar_leading.dart';
 import '../../investments/screens/investments_screen.dart';
 import '../providers/home_providers.dart';
 
@@ -75,23 +74,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: CustomScrollView(
           slivers: [
             SliverAppBar(
-              floating: true,
+              pinned: true,
               toolbarHeight: 72,
               leadingWidth: 72,
-              leading: const AvatarLeading(),
-              title: Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Hallo, ${user?.displayName.split(' ').first ?? 'Nutzer'} 👋',
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    Text('Schön, dass du da bist!',
-                        style: theme.textTheme.bodyMedium),
-                  ],
-                ),
+              leading: const SizedBox.shrink(),
+              automaticallyImplyLeading: false,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Hallo, ${user?.displayName.split(' ').first ?? 'Nutzer'} 👋',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  Text('Schön, dass du da bist!',
+                      style: theme.textTheme.bodyMedium),
+                ],
               ),
             ),
             SliverToBoxAdapter(
