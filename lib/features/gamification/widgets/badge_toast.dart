@@ -159,6 +159,7 @@ class _BadgeToastWidgetState extends State<_BadgeToastWidget>
             child: Material(
               type: MaterialType.transparency,
               child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () {
                   _dismiss();
                   widget.onTap?.call();

@@ -50,7 +50,7 @@ class _AvatarLeadingState extends ConsumerState<AvatarLeading>
     setState(() => _activeTier = tier);
     _glowCtrl.repeat(reverse: true);
     _arrowCtrl.repeat(reverse: true);
-    Future.delayed(const Duration(seconds: 5), () {
+    Future.delayed(const Duration(seconds: 10), () {
       if (!mounted) return;
       _glowCtrl
         ..stop()
@@ -135,7 +135,7 @@ class _AvatarLeadingState extends ConsumerState<AvatarLeading>
               // Bouncing up-arrow during level-up (inside the avatar area)
               if (_activeTier != null)
                 Positioned(
-                  right: 0,
+                  right: -14,
                   top: 20,
                   child: IgnorePointer(
                     child: AnimatedBuilder(
