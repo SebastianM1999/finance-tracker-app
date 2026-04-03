@@ -138,7 +138,25 @@ class PriceService {
       }
     }
 
-    return null;
+    // CoinGecko fallback for coins not available on Binance (e.g. CRO)
+    return _coinGeckoFallback(symbol);
+  }
+
+  static Future<PriceResult?> _coinGeckoFallback(String symbol) async {
+    try {
+      final results = await searchCryptos(symbol);
+      if (results.isEmpty) return null;
+      final coin = results.firstWhere(
+        (c) => c.symbol.toUpperCase() == symbol.toUpperCase(),
+        orElse: () => results.first,
+      );
+      final prices = await fetchCoinGeckoPrices([coin.id]);
+      final price = prices[coin.id];
+      if (price == null) return null;
+      return PriceResult(price: price, source: 'CoinGecko');
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Searches CoinGecko for coins matching [query]. Returns up to 20 results.

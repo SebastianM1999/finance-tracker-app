@@ -3,11 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../features/settings/providers/settings_providers.dart';
 import '../models/gamification_models.dart';
-import '../services/badge_service.dart';
-import '../models/gamification_result.dart';
 import '../providers/gamification_providers.dart';
+import '../services/badge_service.dart';
 import '../widgets/badge_toast.dart';
-import '../widgets/xp_float_animation.dart';
 
 Future<void> triggerGamificationOnSave(
   BuildContext context,
@@ -16,27 +14,19 @@ Future<void> triggerGamificationOnSave(
   String? categoryKey,
 }) async {
   if (!context.mounted) return;
-  // Capture stable refs FIRST — before any await or null checks.
-  _registerOverlays(context);
+  GamificationOverlay.registerOverlay(context);
   final container = ProviderScope.containerOf(context);
 
   if (!container.read(gamificationEnabledProvider)) return;
   final ctx = await _awaitBadgeContext(container);
   if (ctx == null) return;
 
-  final GamificationResult result;
-  if (isFirstInCategory && categoryKey != null) {
-    result = await container.read(gamificationServiceProvider).onFirstInCategory(
-          categoryKey: categoryKey,
-          ctx: ctx,
-        );
-  } else {
-    result = await container.read(gamificationServiceProvider).onRefresh(
-          ctx: ctx,
-          positionUpdatedThisMonth: true,
-          netWorthGrewVsLastMonth: false,
-        );
-  }
+  final result = isFirstInCategory && categoryKey != null
+      ? await container.read(gamificationServiceProvider).onFirstInCategory(
+            categoryKey: categoryKey,
+            ctx: ctx,
+          )
+      : await container.read(gamificationServiceProvider).onRefresh(ctx: ctx);
 
   _playAnimations(container, result);
 }
@@ -47,7 +37,7 @@ Future<void> triggerGamificationOnDebtPaid(
   String debtId,
 ) async {
   if (!context.mounted) return;
-  _registerOverlays(context);
+  GamificationOverlay.registerOverlay(context);
   final container = ProviderScope.containerOf(context);
 
   if (!container.read(gamificationEnabledProvider)) return;
@@ -66,18 +56,15 @@ Future<void> triggerGamificationOnRefresh(
   WidgetRef ref,
 ) async {
   if (!context.mounted) return;
-  _registerOverlays(context);
+  GamificationOverlay.registerOverlay(context);
   final container = ProviderScope.containerOf(context);
 
   if (!container.read(gamificationEnabledProvider)) return;
   final ctx = await _awaitBadgeContext(container);
   if (ctx == null) return;
 
-  final result = await container.read(gamificationServiceProvider).onRefresh(
-        ctx: ctx,
-        positionUpdatedThisMonth: false,
-        netWorthGrewVsLastMonth: false,
-      );
+  final result =
+      await container.read(gamificationServiceProvider).onRefresh(ctx: ctx);
 
   _playAnimations(container, result);
 }
@@ -87,7 +74,7 @@ Future<void> triggerGamificationOnStartup(
   WidgetRef ref,
 ) async {
   if (!context.mounted) return;
-  _registerOverlays(context);
+  GamificationOverlay.registerOverlay(context);
   final container = ProviderScope.containerOf(context);
 
   if (!container.read(gamificationEnabledProvider)) return;
@@ -101,11 +88,6 @@ Future<void> triggerGamificationOnStartup(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-void _registerOverlays(BuildContext context) {
-  XPFloatAnimation.registerOverlay(context);
-  GamificationOverlay.registerOverlay(context);
-}
 
 /// Waits up to ~3 s for all data streams to emit their first value.
 /// Returns null only if streams never load (offline / error).
@@ -128,19 +110,6 @@ void _playAnimations(ProviderContainer container, GamificationResult result) {
     final count = result.newBadges.length;
     container.read(newBadgeCountProvider.notifier).add(count);
     container.read(homeTabBadgeCountProvider.notifier).add(count);
-  }
-
-  if (result.xpGained > 0) XPFloatAnimation.showFromOverlay(result.xpGained);
-
-  if (result.leveledUp) {
-    final profile = container.read(gamificationProfileProvider).valueOrNull;
-    if (profile != null) {
-      container.read(levelUpTierProvider.notifier).state =
-          LevelSystem.tierForLevel(profile.level);
-    }
-  }
-
-  if (result.hasBadges) {
     GamificationOverlay.enqueueFromOverlay(result.newBadges);
   }
 }

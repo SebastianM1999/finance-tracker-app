@@ -31,7 +31,7 @@ class AppScaffold extends ConsumerWidget {
             Positioned(
               top: topPadding,
               left: 0,
-              height: 72,
+              height: 60,
               child: const AvatarLeading(),
             ),
           ],

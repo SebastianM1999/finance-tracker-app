@@ -7,7 +7,7 @@ import '../../../shared/widgets/profile_image_stub.dart'
     if (dart.library.js_interop) '../../../shared/widgets/profile_image_web.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../models/badge_definition.dart';
-import '../models/gamification_models.dart';
+import '../models/gamification_tier.dart';
 import '../providers/gamification_providers.dart';
 import '../widgets/tier_ring.dart';
 import '../../../core/router/app_router.dart';
@@ -16,7 +16,6 @@ import '../../tools/screens/sparrechner_screen.dart';
 import '../../tools/screens/zinsrechner_screen.dart';
 import '../../watchlist/screens/watchlist_screen.dart';
 import 'badge_grid_screen.dart';
-import 'challenge_screen.dart';
 import 'stats_screen.dart';
 
 /// Opens the profile sidebar as a left-side drawer.
@@ -55,12 +54,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
     final newBadgeCount = ref.watch(newBadgeCountProvider);
 
     final profile = profileAsync.valueOrNull;
-    final tier = profile != null
-        ? LevelSystem.tierForLevel(profile.level)
-        : GamificationTier.bronze;
-    final level = profile?.level ?? 1;
-    final totalXP = profile?.totalXP ?? 0;
-    final progress = LevelSystem.levelProgress(totalXP);
+    final tier = profile?.playerTier ?? GamificationTier.bronze;
     final unlockedIds = profile?.unlockedBadgeIds.toSet() ?? <String>{};
     final unlockedCount = kAllBadges
         .where((b) => unlockedIds.contains(b.id))
@@ -93,13 +87,12 @@ class _ProfileSidebarPage extends ConsumerWidget {
 
                 // Profile header
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
                   child: Row(
                     children: [
                       // Avatar with tier ring
                       TierRing(
                         tier: tier,
-                        level: level,
                         radius: 26,
                         strokeWidth: 2.5,
                         child: photoUrl != null
@@ -124,106 +117,18 @@ class _ProfileSidebarPage extends ConsumerWidget {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              displayName.split(' ').first,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Row(
-                              children: [
-                                // Tier chip — same style as badge toast
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 7, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: tier.primaryColor.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: tier.primaryColor.withOpacity(0.45),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    tier.label.toUpperCase(),
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w800,
-                                      color: tier.primaryColor,
-                                      letterSpacing: 1.2,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Level $level',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: tier.primaryColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // XP bar
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 5,
-                          backgroundColor: Colors.white10,
-                          valueColor:
-                              AlwaysStoppedAnimation(tier.primaryColor),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '$totalXP XP',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontStyle: FontStyle.italic,
-                              color: Colors.white.withOpacity(0.4),
-                            ),
+                        child: Text(
+                          displayName.split(' ').first,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
                           ),
-                          if (level < LevelSystem.maxLevel)
-                            Text(
-                              'Nächstes Level: ${LevelSystem.xpToNextLevel(totalXP)} XP',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontStyle: FontStyle.italic,
-                                color: Colors.white.withOpacity(0.4),
-                              ),
-                            ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-
-                const SizedBox(height: 12),
 
                 const Divider(color: Colors.white10, height: 1),
 
@@ -234,7 +139,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
 
-                // Group: Gaming
+                // Group: Errungenschaften
                 const _SectionHeader(label: 'Errungenschaften'),
                 _MenuItem(
                   icon: Icons.military_tech_outlined,
@@ -253,25 +158,6 @@ class _ProfileSidebarPage extends ConsumerWidget {
                         minChildSize: 0.5,
                         maxChildSize: 0.95,
                         builder: (_, ctrl) => const BadgeGridScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _MenuItem(
-                  icon: Icons.bolt_outlined,
-                  title: 'Herausforderungen',
-                  trailing: null,
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => DraggableScrollableSheet(
-                        initialChildSize: 0.92,
-                        minChildSize: 0.5,
-                        maxChildSize: 0.95,
-                        builder: (_, ctrl) => const ChallengeScreen(),
                       ),
                     );
                   },

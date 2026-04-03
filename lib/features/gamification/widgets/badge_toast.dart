@@ -221,17 +221,6 @@ class _BadgeToastWidgetState extends State<_BadgeToastWidget>
                                               height: 1.1,
                                             ),
                                           ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '+${widget.badge.xpReward} XP',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.white
-                                                  .withOpacity(0.4),
-                                              fontWeight: FontWeight.w500,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                          ),
                                         ],
                                       ),
                                     ),

@@ -503,22 +503,28 @@ class _ScrubInfoCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            CurrencyFormatter.format(snapshot.totalNetWorth),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              CurrencyFormatter.format(snapshot.totalNetWorth),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           if (change != null) ...[
             const SizedBox(width: 6),
-            Text(
-              CurrencyFormatter.formatPnl(change),
-              style: TextStyle(
-                color: isPos ? AppColors.darkPositive : AppColors.darkSecondary,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                CurrencyFormatter.formatPnl(change),
+                style: TextStyle(
+                  color: isPos ? AppColors.darkPositive : AppColors.darkSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

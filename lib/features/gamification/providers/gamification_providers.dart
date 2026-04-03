@@ -5,9 +5,7 @@ import '../../home/providers/home_providers.dart';
 import '../data/gamification_repository.dart';
 import '../models/gamification_models.dart';
 import '../services/badge_service.dart';
-import '../services/challenge_service.dart';
 import '../services/gamification_service.dart';
-import '../services/xp_service.dart';
 
 // ── Unseen badge counters (ephemeral, session-only) ───────────────────────────
 
@@ -28,12 +26,6 @@ class _NewBadgeNotifier extends StateNotifier<int> {
   void clear() => state = 0;
 }
 
-// ── Level-up pulse signal (ephemeral, session-only) ──────────────────────────
-
-// Set to the new tier when a level-up occurs; avatar widgets watch this and
-// play a pulse animation, then clear it back to null.
-final levelUpTierProvider = StateProvider<GamificationTier?>((ref) => null);
-
 // ── Repository ────────────────────────────────────────────────────────────────
 
 final gamificationRepositoryProvider = Provider<GamificationRepository>((ref) {
@@ -43,19 +35,12 @@ final gamificationRepositoryProvider = Provider<GamificationRepository>((ref) {
 
 // ── Services ──────────────────────────────────────────────────────────────────
 
-final xpServiceProvider = Provider<XPService>((ref) => const XPService());
-
 final badgeServiceProvider = Provider<BadgeService>((ref) => const BadgeService());
-
-final challengeServiceProvider =
-    Provider<ChallengeService>((ref) => const ChallengeService());
 
 final gamificationServiceProvider = Provider<GamificationService>((ref) {
   return GamificationService(
     repository: ref.watch(gamificationRepositoryProvider),
-    xpService: ref.watch(xpServiceProvider),
     badgeService: ref.watch(badgeServiceProvider),
-    challengeService: ref.watch(challengeServiceProvider),
   );
 });
 
@@ -112,13 +97,9 @@ final badgeContextProvider = Provider<BadgeContext?>((ref) {
   final activeDebts = schuldenList.where((d) => d.iOwe).length;
   if (schuldenList.isNotEmpty) categoryValues['schulden'] = 0; // presence only
 
-  final activeCategories = categoryValues.length;
-
   // daysSinceLastDebtAdded — from latest createdAt in schulden stream
   final sortedDebtDates = schuldenList.map((d) => d.createdAt).toList()
     ..sort((a, b) => b.compareTo(a));
-  // When list is empty the user just cleared debts now — use 0, not 9999,
-  // so the diamond badge isn't awarded instantly on deletion.
   final daysSinceLast = sortedDebtDates.isEmpty
       ? 0
       : DateTime.now().difference(sortedDebtDates.first).inDays;
@@ -133,7 +114,6 @@ final badgeContextProvider = Provider<BadgeContext?>((ref) {
       .where((a) => a.assetType == 'Gold' || a.assetType == 'Silver')
       .fold(0.0, (s, a) => s + a.currentValue);
 
-  // New context fields
   final investedTotal = festgeldTotal + etfTotal + cryptoTotal + assetsTotal;
 
   final totalPositions = (giro.length) +
@@ -156,7 +136,7 @@ final badgeContextProvider = Provider<BadgeContext?>((ref) {
 
   return BadgeContext(
     netWorth: netWorth,
-    activeCategories: activeCategories,
+    activeCategories: categoryValues.length,
     categoryValues: categoryValues,
     totalDebtsEverAdded: schuldenList.length + paidOffDebts,
     activeDebts: activeDebts,

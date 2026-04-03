@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
-enum GamificationTier { bronze, silver, gold, diamond }
+/// Badge rarity tier — also used for visual styling of badge cards, toasts, and the avatar ring.
+enum GamificationTier {
+  bronze,
+  silver,
+  gold,
+  diamond;
 
-extension GamificationTierX on GamificationTier {
   String get label {
     switch (this) {
       case GamificationTier.bronze:
@@ -19,11 +23,11 @@ extension GamificationTierX on GamificationTier {
   Color get primaryColor {
     switch (this) {
       case GamificationTier.bronze:
-        return const Color(0xFFFF9B3C); // vibrant copper-orange
+        return const Color(0xFFCD7F32);
       case GamificationTier.silver:
         return const Color(0xFFB8C8D8);
       case GamificationTier.gold:
-        return const Color(0xFFD4A017); // rich amber gold
+        return const Color(0xFFD4A017);
       case GamificationTier.diamond:
         return const Color(0xFF00CFFF);
     }
@@ -32,70 +36,13 @@ extension GamificationTierX on GamificationTier {
   List<Color> get gradient {
     switch (this) {
       case GamificationTier.bronze:
-        // Warm copper tones — no dark brown
-        return [const Color(0xFFFFB347), const Color(0xFFFF7C2A)];
+        return const [Color(0xFF5C2700), Color(0xFFCD7F32), Color(0xFFFF9B3C), Color(0xFFFFD090), Color(0xFFFF9B3C), Color(0xFFCD7F32), Color(0xFF5C2700)];
       case GamificationTier.silver:
-        return [const Color(0xFFE0E8F0), const Color(0xFF8A9AB0)];
+        return const [Color(0xFF4A5A6A), Color(0xFF9AAABB), Color(0xFFD8E8F0), Color(0xFFFFFFFF), Color(0xFFD8E8F0), Color(0xFF9AAABB), Color(0xFF4A5A6A)];
       case GamificationTier.gold:
-        return [const Color(0xFFE8C23A), const Color(0xFFB8860B)];
+        return const [Color(0xFF4A2800), Color(0xFFB8860B), Color(0xFFD4A017), Color(0xFFFFF0A0), Color(0xFFD4A017), Color(0xFFB8860B), Color(0xFF4A2800)];
       case GamificationTier.diamond:
-        return [const Color(0xFF00CFFF), const Color(0xFF7B2FBE), const Color(0xFFFF6EC7)];
-    }
-  }
-
-  // Confetti colors: vivid mix so it never looks monochrome
-  List<Color> get confettiColors {
-    switch (this) {
-      case GamificationTier.bronze:
-        return [
-          const Color(0xFFFFB347),
-          const Color(0xFFFF7C2A),
-          const Color(0xFFD4A017),
-          Colors.white,
-          const Color(0xFFFFE0A0),
-        ];
-      case GamificationTier.silver:
-        return [
-          const Color(0xFFE0E8F0),
-          const Color(0xFF8A9AB0),
-          Colors.white,
-          const Color(0xFFB0C4DE),
-          const Color(0xFF6EC6FF),
-        ];
-      case GamificationTier.gold:
-        return [
-          const Color(0xFFE8C23A),
-          const Color(0xFFD4A017),
-          Colors.white,
-          const Color(0xFFB8860B),
-          const Color(0xFFFFF0A0),
-        ];
-      case GamificationTier.diamond:
-        return [
-          const Color(0xFF00CFFF),
-          const Color(0xFF7B2FBE),
-          const Color(0xFFFF6EC7),
-          Colors.white,
-          const Color(0xFFA0FFEE),
-        ];
-    }
-  }
-
-  Color get backgroundColor {
-    // All tiers use the same near-black so tier color pops, not blends in
-    return const Color(0xFF080B12);
-  }
-
-  Color get glowColor {
-    switch (this) {
-      case GamificationTier.bronze:
-        return const Color(0xFFFF9B3C);
-      case GamificationTier.silver:
-        return const Color(0xFFB8C8D8);
-      case GamificationTier.gold:
-        return const Color(0xFFD4A017);
-      case GamificationTier.diamond:
-        return const Color(0xFF00CFFF);
+        return const [Color(0xFF001A3A), Color(0xFF0077BB), Color(0xFF00CFFF), Color(0xFFAAEEFF), Color(0xFF00CFFF), Color(0xFF0077BB), Color(0xFF001A3A)];
     }
   }
 }

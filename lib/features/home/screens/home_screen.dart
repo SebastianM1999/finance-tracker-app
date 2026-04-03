@@ -75,8 +75,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           slivers: [
             SliverAppBar(
               pinned: true,
-              toolbarHeight: 72,
-              leadingWidth: 72,
+              toolbarHeight: 60,
+              leadingWidth: 52,
               leading: const SizedBox.shrink(),
               automaticallyImplyLeading: false,
               title: Column(

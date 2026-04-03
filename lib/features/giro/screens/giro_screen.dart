@@ -25,10 +25,10 @@ class GiroScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 72,
+        toolbarHeight: 60,
         automaticallyImplyLeading: false,
         leading: const SizedBox.shrink(),
-        leadingWidth: 72,
+        leadingWidth: 52,
         title: const Text('Giro Konten'),
       ),
       body: accounts.when(

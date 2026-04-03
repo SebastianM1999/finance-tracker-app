@@ -31,8 +31,7 @@ class AppConstants {
   static const String colNetWorthHistory = 'net_worth_history';
   static const String colGamification = 'gamification';
   static const String docGamificationProfile = 'profile';
-  static const String colXpEvents = 'xpEvents';
-  static const String colWatchlist = 'watchlist';
+static const String colWatchlist = 'watchlist';
 
   // Notification channel
   static const String notifChannelId = 'festgeld_maturity';

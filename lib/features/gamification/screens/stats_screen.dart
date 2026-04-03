@@ -6,7 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../home/providers/home_providers.dart';
 import '../../settings/providers/settings_providers.dart';
-import '../models/gamification_models.dart';
 import '../providers/gamification_providers.dart';
 
 // ── Category colors (brighter than gradient starts for better chart visibility)
@@ -44,19 +43,13 @@ class StatsScreen extends ConsumerWidget {
             );
           }
 
-          final tier = profile.tier;
           final daysActive =
               DateTime.now().difference(profile.createdAt).inDays + 1;
           final badgeCount = profile.unlockedBadgeIds.length;
-          final challengeCount = profile.completedChallengeIds.length;
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
             children: [
-              // ── Gamification card ──────────────────────────────────────────
-              _GamificationCard(profile: profile, tier: tier),
-              const SizedBox(height: 16),
-
               // ── Quick stat tiles ───────────────────────────────────────────
               Row(
                 children: [
@@ -66,24 +59,10 @@ class StatsScreen extends ConsumerWidget {
                       value: '$badgeCount',
                       sub: 'von 32',
                       icon: Icons.military_tech_outlined,
-                      color: tier.primaryColor,
+                      color: AppColors.darkPrimary,
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatTile(
-                      label: 'Herausforderungen',
-                      value: '$challengeCount',
-                      sub: 'abgeschlossen',
-                      icon: Icons.bolt_outlined,
-                      color: tier.primaryColor,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
                   Expanded(
                     child: _StatTile(
                       label: 'Aktiv seit',
@@ -93,7 +72,11 @@ class StatsScreen extends ConsumerWidget {
                       color: AppColors.darkPrimary,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
                   Expanded(
                     child: _StatTile(
                       label: 'Updates',
@@ -103,6 +86,8 @@ class StatsScreen extends ConsumerWidget {
                       color: AppColors.darkPrimary,
                     ),
                   ),
+                  const SizedBox(width: 12),
+                  const Expanded(child: SizedBox()),
                 ],
               ),
               const SizedBox(height: 28),
@@ -1068,91 +1053,6 @@ Widget _emptyCard(String message) {
 }
 
 // ── Gamification card ─────────────────────────────────────────────────────────
-
-class _GamificationCard extends StatelessWidget {
-  const _GamificationCard({required this.profile, required this.tier});
-  final GamificationProfile profile;
-  final GamificationTier tier;
-
-  @override
-  Widget build(BuildContext context) {
-    final isMaxLevel = profile.level >= LevelSystem.maxLevel;
-    final xpInLevel = LevelSystem.xpIntoCurrentLevel(profile.totalXP);
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            tier.primaryColor.withValues(alpha: 0.15),
-            tier.primaryColor.withValues(alpha: 0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(
-            color: tier.primaryColor.withValues(alpha: 0.3), width: 1),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: tier.primaryColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(tier.label,
-                    style: TextStyle(
-                        color: tier.primaryColor,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12)),
-              ),
-              const Spacer(),
-              Text('Level ${profile.level}',
-                  style: TextStyle(
-                      color: tier.primaryColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 22)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: profile.levelProgress,
-              minHeight: 8,
-              backgroundColor: Colors.white10,
-              valueColor: AlwaysStoppedAnimation(tier.primaryColor),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('${profile.totalXP} XP gesamt',
-                  style: const TextStyle(
-                      color: Colors.white54, fontSize: 12)),
-              if (!isMaxLevel)
-                Text('$xpInLevel / ${LevelSystem.xpPerLevel} XP',
-                    style: const TextStyle(
-                        color: Colors.white54,
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic))
-              else
-                const Text('MAX',
-                    style: TextStyle(color: Colors.white54, fontSize: 12)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ── Stat tile ─────────────────────────────────────────────────────────────────
 

@@ -82,18 +82,6 @@ class BadgeService {
       case 't_age_gold':   return DateTime.now().difference(profile.createdAt).inDays >= 90;
       case 't_age_diamond': return DateTime.now().difference(profile.createdAt).inDays >= 365;
 
-      // ── Dabei seit: t_xp ──
-      case 't_xp_bronze': return profile.totalXP >= 200;
-      case 't_xp_silver': return profile.totalXP >= 800;
-      case 't_xp_gold':   return profile.totalXP >= 3000;
-      case 't_xp_diamond': return profile.totalXP >= 10000;
-
-      // ── Dabei seit: t_level ──
-      case 't_level_bronze': return profile.level >= 3;
-      case 't_level_silver': return profile.level >= 8;
-      case 't_level_gold':   return profile.level >= 20;
-      case 't_level_diamond': return profile.level >= 50;
-
       // ── Festgeld: fg_count ──
       case 'fg_count_bronze': return ctx.festgeldCount >= 1;
       case 'fg_count_silver': return ctx.festgeldCount >= 2;

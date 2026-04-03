@@ -77,7 +77,7 @@ class SettingsScreen extends ConsumerWidget {
             child: Column(
               children: [
                 SwitchListTile(
-                  title: const Text('XP & Abzeichen'),
+                  title: const Text('Abzeichen'),
                   subtitle: const Text('Belohnungen für Finanzziele'),
                   secondary: const Icon(Icons.emoji_events_outlined),
                   value: gamificationEnabled,
@@ -105,7 +105,7 @@ class SettingsScreen extends ConsumerWidget {
                       color: AppColors.darkSecondary),
                   title: const Text('Fortschritt zurücksetzen [TEST]',
                       style: TextStyle(color: AppColors.darkSecondary)),
-                  subtitle: const Text('Löscht XP, Badges & Abzeichen'),
+                  subtitle: const Text('Löscht alle Badges & Fortschritt'),
                   onTap: () => _resetGamification(context, ref),
                 ),
                 Divider(height: 1, color: theme.colorScheme.outline),

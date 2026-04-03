@@ -108,37 +108,7 @@ class BadgeDetailSheet extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 20),
-
-          // XP reward
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF252830),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  '⭐',
-                  style: TextStyle(fontSize: 16),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '+${badge.xpReward} XP',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    fontStyle: FontStyle.italic,
-                    color: Color(0xFFD4A017),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 8),
+          const SizedBox(height: 20);
 
           Text(
             'Kategorie: ${badge.category.label}',
