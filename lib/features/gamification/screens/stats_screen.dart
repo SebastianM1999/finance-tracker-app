@@ -39,7 +39,8 @@ class StatsScreen extends ConsumerWidget {
         data: (profile) {
           if (profile == null) {
             return Center(
-              child: Text('Noch keine Daten', style: theme.textTheme.bodyMedium),
+              child:
+                  Text('Noch keine Daten', style: theme.textTheme.bodyMedium),
             );
           }
 
@@ -309,8 +310,8 @@ class _ProCard extends ConsumerWidget {
             const SizedBox(height: 8),
             const Text(
               'Diese Analyse ist Teil von FinTrack Pro.\nWir arbeiten daran — bald verfügbar!',
-              style: TextStyle(
-                  color: Colors.white60, fontSize: 14, height: 1.5),
+              style:
+                  TextStyle(color: Colors.white60, fontSize: 14, height: 1.5),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -325,8 +326,8 @@ class _ProCard extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Text('Verstanden',
-                    style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600)),
+                    style:
+                        TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
               ),
             ),
           ],
@@ -394,7 +395,7 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
       return PieChartSectionData(
         value: value,
         color: categories[i].$2,
-        radius: isTouched ? 64 : 52,
+        radius: isTouched ? 60 : 52,
         showTitle: false,
       );
     });
@@ -409,73 +410,73 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
       child: Column(
         children: [
           SizedBox(
-            height: 200,
-            child: PieChart(
-              PieChartData(
-                sections: sections,
-                centerSpaceRadius: 60,
-                sectionsSpace: 2,
-                pieTouchData: PieTouchData(
-                  touchCallback: (event, response) {
-                    setState(() {
-                      if (!event.isInterestedForInteractions ||
-                          response == null ||
-                          response.touchedSection == null) {
-                        _touchedIndex = -1;
-                        return;
-                      }
-                      _touchedIndex =
-                          response.touchedSection!.touchedSectionIndex;
-                    });
-                  },
+            height: 230,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                PieChart(
+                  PieChartData(
+                    sections: sections,
+                    centerSpaceRadius: 60,
+                    sectionsSpace: 2,
+                    pieTouchData: PieTouchData(
+                      touchCallback: (event, response) {
+                        if (event is! FlTapUpEvent) return;
+                        final tapped =
+                            response?.touchedSection?.touchedSectionIndex ?? -1;
+                        setState(() {
+                          _touchedIndex = _touchedIndex == tapped ? -1 : tapped;
+                        });
+                      },
+                    ),
+                  ),
                 ),
-              ),
+                // Label in the donut centre
+                AnimatedOpacity(
+                  opacity:
+                      (_touchedIndex >= 0 && _touchedIndex < categories.length)
+                          ? 1.0
+                          : 0.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: _touchedIndex >= 0 && _touchedIndex < categories.length
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              categories[_touchedIndex].$1,
+                              style: TextStyle(
+                                color: categories[_touchedIndex].$2,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              CurrencyFormatter.format(values[_touchedIndex]),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${(values[_touchedIndex] / total * 100).toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.55),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
             ),
           ),
 
-          // Touched label
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 150),
-            child: _touchedIndex >= 0 && _touchedIndex < categories.length
-                ? Padding(
-                    key: ValueKey(_touchedIndex),
-                    padding: const EdgeInsets.only(top: 8, bottom: 4),
-                    child: RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: categories[_touchedIndex].$1,
-                            style: TextStyle(
-                              color: categories[_touchedIndex].$2,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          TextSpan(
-                            text:
-                                '  ${CurrencyFormatter.format(values[_touchedIndex])}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          TextSpan(
-                            text:
-                                '  (${(values[_touchedIndex] / total * 100).toStringAsFixed(1)}%)',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.45),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : const SizedBox(key: ValueKey(-1), height: 4),
-          ),
-
-          const SizedBox(height: 8),
+          const SizedBox(height: 25),
 
           // Legend
           Wrap(
@@ -498,8 +499,7 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
                   const SizedBox(width: 4),
                   Text(
                     categories[i].$1,
-                    style: const TextStyle(
-                        color: Colors.white54, fontSize: 11),
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
                   ),
                 ],
               );
@@ -510,8 +510,7 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
           if (schulden < 0) ...[
             const SizedBox(height: 10),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: AppColors.darkSecondary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
@@ -548,24 +547,34 @@ class _ProfitabilityCard extends ConsumerWidget {
     final positions = <(String, double, Color)>[];
     for (final e in etfList) {
       if (e.buyPrice > 0) {
-        positions.add((e.ticker ?? e.name, (e.currentPrice / e.buyPrice - 1) * 100, _cEtf));
+        positions.add((
+          e.ticker ?? e.name,
+          (e.currentPrice / e.buyPrice - 1) * 100,
+          _cEtf
+        ));
       }
     }
     for (final c in cryptoList) {
       if (c.buyPrice > 0) {
-        positions.add((c.coinSymbol, (c.currentPrice / c.buyPrice - 1) * 100, _cCrypto));
+        positions.add(
+            (c.coinSymbol, (c.currentPrice / c.buyPrice - 1) * 100, _cCrypto));
       }
     }
     for (final a in assetsList) {
       if (a.buyPrice > 0) {
-        positions.add((a.description, (a.currentValue / a.buyPrice - 1) * 100, _cPhysical));
+        positions.add((
+          a.description,
+          (a.currentValue / a.buyPrice - 1) * 100,
+          _cPhysical
+        ));
       }
     }
     positions.sort((a, b) => b.$2.compareTo(a.$2));
 
     if (positions.isEmpty) return _emptyCard('Noch keine Investmentpositionen');
 
-    final maxAbs = positions.fold(0.0, (m, p) => p.$2.abs() > m ? p.$2.abs() : m);
+    final maxAbs =
+        positions.fold(0.0, (m, p) => p.$2.abs() > m ? p.$2.abs() : m);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -579,7 +588,9 @@ class _ProfitabilityCard extends ConsumerWidget {
         children: [
           const Text('Investitions-Profitabilität',
               style: TextStyle(
-                  color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           ...positions.map((p) {
             final (name, pct, color) = p;
@@ -679,7 +690,8 @@ class _RiskProfileCard extends ConsumerWidget {
         .toList();
     final total = positives.fold(0.0, (s, v) => s + v);
 
-    if (total <= 0) return _emptyCard('Noch keine Positionen für Risikoanalyse');
+    if (total <= 0)
+      return _emptyCard('Noch keine Positionen für Risikoanalyse');
 
     const weights = [0.1, 0.0, 0.5, 1.0, 0.3];
     final riskScore = List.generate(5, (i) => positives[i] * weights[i])
@@ -715,8 +727,7 @@ class _RiskProfileCard extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: labelColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: labelColor.withValues(alpha: 0.4)),
+                  border: Border.all(color: labelColor.withValues(alpha: 0.4)),
                 ),
                 child: Text(label,
                     style: TextStyle(
@@ -769,7 +780,8 @@ class _RiskProfileCard extends ConsumerWidget {
               child: Row(
                 children: [
                   Container(
-                      width: 8, height: 8,
+                      width: 8,
+                      height: 8,
                       decoration: BoxDecoration(
                           color: colors[i], shape: BoxShape.circle)),
                   const SizedBox(width: 8),
@@ -779,8 +791,8 @@ class _RiskProfileCard extends ConsumerWidget {
                             color: Colors.white60, fontSize: 12)),
                   ),
                   Text('${(positives[i] / total * 100).toStringAsFixed(1)}%',
-                      style: const TextStyle(
-                          color: Colors.white54, fontSize: 11)),
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 11)),
                 ],
               ),
             );
@@ -805,20 +817,26 @@ class _TopFlopCard extends ConsumerWidget {
     final positions = <(String, double, Color)>[];
     for (final e in etfList) {
       if (e.buyPrice > 0) {
-        positions.add((e.ticker ?? e.name,
-            (e.currentPrice / e.buyPrice - 1) * 100, _cEtf));
+        positions.add((
+          e.ticker ?? e.name,
+          (e.currentPrice / e.buyPrice - 1) * 100,
+          _cEtf
+        ));
       }
     }
     for (final c in cryptoList) {
       if (c.buyPrice > 0) {
-        positions.add((c.coinSymbol,
-            (c.currentPrice / c.buyPrice - 1) * 100, _cCrypto));
+        positions.add(
+            (c.coinSymbol, (c.currentPrice / c.buyPrice - 1) * 100, _cCrypto));
       }
     }
     for (final a in assetsList) {
       if (a.buyPrice > 0) {
-        positions.add((a.description,
-            (a.currentValue / a.buyPrice - 1) * 100, _cPhysical));
+        positions.add((
+          a.description,
+          (a.currentValue / a.buyPrice - 1) * 100,
+          _cPhysical
+        ));
       }
     }
 
@@ -919,8 +937,8 @@ class _TopFlopRow extends StatelessWidget {
           ),
           Text(
             '${pct >= 0 ? '+' : ''}${pct.toStringAsFixed(1)}%',
-            style: TextStyle(
-                color: c, fontSize: 11, fontWeight: FontWeight.w600),
+            style:
+                TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -1016,7 +1034,8 @@ class _CategoryGrowthCard extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                          width: 16, height: 3,
+                          width: 16,
+                          height: 3,
                           color: cfg.$3,
                           margin: const EdgeInsets.only(right: 4)),
                       Text(cfg.$1,

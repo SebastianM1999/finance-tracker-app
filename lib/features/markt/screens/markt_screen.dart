@@ -244,7 +244,7 @@ class _IndicesBar extends StatelessWidget {
               isPos ? AppColors.darkPositive : AppColors.darkSecondary;
           return Container(
             padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(10),
@@ -253,7 +253,7 @@ class _IndicesBar extends StatelessWidget {
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   idx.name,

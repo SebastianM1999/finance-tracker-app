@@ -159,21 +159,64 @@ class _MissionCardState extends State<MissionCard>
       size: 86,
     );
 
-    if (isGold || isDiamond) {
-      // Background circle pulses in tier color; badge image stays static.
-      final bgAlpha = isGold
-          ? 0.12 + 0.22 * sinVal   // gold: 0.12 → 0.34
-          : 0.10 + 0.15 * sinVal;  // diamond: slightly subtler
-
+    if (isGold) {
+      // Warm radial glow that breathes — no flat circle, just light
       badgeWidget = Stack(
         alignment: Alignment.center,
         children: [
           Container(
-            width: 78,
-            height: 78,
+            width: 92,
+            height: 92,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: highest.tier.primaryColor.withValues(alpha: bgAlpha),
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFFFFCC00).withValues(alpha: 0.10 + 0.12 * sinVal),
+                  const Color(0xFFFF8800).withValues(alpha: 0.03 + 0.06 * sinVal),
+                  Colors.transparent,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFFAA00).withValues(alpha: 0.28 * sinVal),
+                  blurRadius: 14 + 10 * sinVal,
+                  spreadRadius: 0 + 2 * sinVal,
+                ),
+              ],
+            ),
+          ),
+          BadgeImage(
+            missionId: widget.mission.id,
+            tier: highest.tier,
+            fallbackEmoji: widget.mission.category.emoji,
+            size: 86,
+          ),
+        ],
+      );
+    } else if (isDiamond) {
+      // Same glow as gold, shifted to icy cyan/diamond tones
+      badgeWidget = Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 92,
+            height: 92,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFF00E5FF).withValues(alpha: 0.10 + 0.12 * sinVal),
+                  const Color(0xFF0088CC).withValues(alpha: 0.03 + 0.06 * sinVal),
+                  Colors.transparent,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00CCFF).withValues(alpha: 0.28 * sinVal),
+                  blurRadius: 14 + 10 * sinVal,
+                  spreadRadius: 0 + 2 * sinVal,
+                ),
+              ],
             ),
           ),
           BadgeImage(

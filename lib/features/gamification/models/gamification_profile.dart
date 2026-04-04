@@ -37,8 +37,8 @@ class GamificationProfile {
   GamificationTier get playerTier {
     final count = unlockedBadgeIds.length;
     if (count >= 20) return GamificationTier.diamond;
-    if (count >= 12) return GamificationTier.gold;
-    if (count >= 5)  return GamificationTier.silver;
+    if (count >= 15) return GamificationTier.gold;
+    if (count >= 10) return GamificationTier.silver;
     return GamificationTier.bronze;
   }
 
@@ -65,10 +65,9 @@ class GamificationProfile {
       lastCheckedAt: d['lastCheckedAt'] != null
           ? (d['lastCheckedAt'] as Timestamp).toDate()
           : DateTime.now(),
-      badgeUnlockedAt:
-          (d['badgeUnlockedAt'] as Map<String, dynamic>?)?.map(
-                (k, v) => MapEntry(k, (v as Timestamp).toDate()),
-              ) ??
+      badgeUnlockedAt: (d['badgeUnlockedAt'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, (v as Timestamp).toDate()),
+          ) ??
           {},
     );
   }
@@ -80,8 +79,8 @@ class GamificationProfile {
         'matureCount': matureCount,
         'createdAt': Timestamp.fromDate(createdAt),
         'lastCheckedAt': Timestamp.fromDate(lastCheckedAt),
-        'badgeUnlockedAt': badgeUnlockedAt
-            .map((k, v) => MapEntry(k, Timestamp.fromDate(v))),
+        'badgeUnlockedAt':
+            badgeUnlockedAt.map((k, v) => MapEntry(k, Timestamp.fromDate(v))),
       };
 
   GamificationProfile copyWith({
