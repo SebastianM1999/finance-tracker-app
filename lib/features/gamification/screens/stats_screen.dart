@@ -149,13 +149,6 @@ class StatsScreen extends ConsumerWidget {
               _ProSectionHeader(),
               const SizedBox(height: 12),
               const _ProCard(
-                title: 'Investitions-Profitabilität',
-                description: 'Gewinn/Verlust je Position',
-                icon: Icons.bar_chart_outlined,
-                child: _ProfitabilityCard(),
-              ),
-              const SizedBox(height: 12),
-              const _ProCard(
                 title: 'Risikoprofil',
                 description: 'Einschätzung deiner Risikobereitschaft',
                 icon: Icons.shield_outlined,
@@ -595,144 +588,87 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
   }
 }
 
-// ── PRO: Investitions-Profitabilität ──────────────────────────────────────────
-
-class _ProfitabilityCard extends ConsumerWidget {
-  const _ProfitabilityCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final etfList = ref.watch(etfStreamProvider).valueOrNull ?? [];
-    final cryptoList = ref.watch(cryptoStreamProvider).valueOrNull ?? [];
-    final assetsList = ref.watch(assetsStreamProvider).valueOrNull ?? [];
-
-    final positions = <(String, double, Color)>[];
-    for (final e in etfList) {
-      if (e.buyPrice > 0) {
-        positions.add((
-          e.ticker ?? e.name,
-          (e.currentPrice / e.buyPrice - 1) * 100,
-          _cEtf
-        ));
-      }
-    }
-    for (final c in cryptoList) {
-      if (c.buyPrice > 0) {
-        positions.add(
-            (c.coinSymbol, (c.currentPrice / c.buyPrice - 1) * 100, _cCrypto));
-      }
-    }
-    for (final a in assetsList) {
-      if (a.buyPrice > 0) {
-        positions.add((
-          a.description,
-          (a.currentValue / a.buyPrice - 1) * 100,
-          _cPhysical
-        ));
-      }
-    }
-    positions.sort((a, b) => b.$2.compareTo(a.$2));
-
-    if (positions.isEmpty) return _emptyCard('Noch keine Investmentpositionen');
-
-    final maxAbs =
-        positions.fold(0.0, (m, p) => p.$2.abs() > m ? p.$2.abs() : m);
-
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-    final outline = Theme.of(context).colorScheme.outline;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: onSurface.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: outline.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Investitions-Profitabilität',
-              style: TextStyle(
-                  color: onSurface,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
-          ...positions.map((p) {
-            final (name, pct, color) = p;
-            final isPos = pct >= 0;
-            final barColor =
-                isPos ? AppColors.positive(context) : AppColors.secondary(context);
-            final barFrac = maxAbs == 0 ? 0.0 : pct.abs() / maxAbs;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 60,
-                    child: Text(name,
-                        style: TextStyle(
-                            color: onSurface.withValues(alpha: 0.6), fontSize: 11),
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: LayoutBuilder(builder: (_, constraints) {
-                      final half = constraints.maxWidth / 2;
-                      return Stack(
-                        children: [
-                          Container(
-                            height: 18,
-                            decoration: BoxDecoration(
-                              color: onSurface.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          Positioned(
-                            left: isPos ? half : half - half * barFrac,
-                            child: Container(
-                              width: half * barFrac,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: barColor.withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            left: half - 0.5,
-                            child: Container(
-                                width: 1, height: 18,
-                                color: outline.withValues(alpha: 0.15)),
-                          ),
-                        ],
-                      );
-                    }),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 52,
-                    child: Text(
-                      '${isPos ? '+' : ''}${pct.toStringAsFixed(1)}%',
-                      style: TextStyle(
-                          color: barColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600),
-                      textAlign: TextAlign.right,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
 // ── PRO: Risikoprofil ─────────────────────────────────────────────────────────
 
 class _RiskProfileCard extends ConsumerWidget {
   const _RiskProfileCard();
+
+  static void _showRiskInfoDialog(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final surface = Theme.of(context).colorScheme.surface;
+    const levels = [
+      (0.0, 'Konservativ', Color(0xFF3F8ACB),
+          'Tagesgeld & Giro – kaum Wertschwankungen, sehr sicher.'),
+      (0.0, 'Festgeld', Color(0xFF3F8ACB),
+          'Festgeld – gebundenes Kapital, stabil und risikoarm.'),
+      (0.3, 'Ausgewogen', Color(0xFF4ADE80),
+          'Sachwerte (z. B. Gold, Immobilien) – geringes bis mittleres Risiko.'),
+      (0.5, 'Wachstum', Color(0xFFF39C12),
+          'ETF & Aktien – Marktrisiko, aber breite Streuung.'),
+      (1.0, 'Spekulativ', Color(0xFFFF6B6B),
+          'Krypto – hohe Volatilität, maximales Verlustrisiko.'),
+    ];
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Was ist das Risikoprofil?',
+            style: TextStyle(
+                color: onSurface, fontSize: 15, fontWeight: FontWeight.w700)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Dein Risikoprofil zeigt, wie risikoreich dein Portfolio aufgestellt ist – basierend auf der Verteilung deiner Vermögensklassen.',
+              style: TextStyle(
+                  color: onSurface.withValues(alpha: 0.7), fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            ...levels.map((l) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                            color: l.$3, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(l.$2,
+                                style: TextStyle(
+                                    color: l.$3,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700)),
+                            Text(l.$4,
+                                style: TextStyle(
+                                    color: onSurface.withValues(alpha: 0.6),
+                                    fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Verstanden'),
+          ),
+        ],
+      ),
+    );
+  }
 
   static (String, Color) _label(double score) {
     if (score < 0.15) return ('Konservativ', Color(0xFF3F8ACB));
@@ -766,7 +702,8 @@ class _RiskProfileCard extends ConsumerWidget {
     final (label, labelColor) = _label(riskScore);
 
     const names = ['Giro', 'Festgeld', 'ETF & Aktien', 'Krypto', 'Sachwerte'];
-    const colors = [_cGiro, _cFestgeld, _cEtf, _cCrypto, _cPhysical];
+    // Dot color reflects each category's risk level, not its brand color
+    final colors = List.generate(5, (i) => _label(weights[i]).$2);
 
     final onSurface = Theme.of(context).colorScheme.onSurface;
     final outline = Theme.of(context).colorScheme.outline;
@@ -787,6 +724,12 @@ class _RiskProfileCard extends ConsumerWidget {
                       color: onSurface,
                       fontSize: 14,
                       fontWeight: FontWeight.w600)),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: () => _showRiskInfoDialog(context),
+                child: Icon(Icons.help_outline_rounded,
+                    size: 15, color: onSurface.withValues(alpha: 0.38)),
+              ),
               const Spacer(),
               Container(
                 padding:
@@ -923,7 +866,14 @@ class _TopFlopCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: outline.withValues(alpha: 0.12)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Top & Flop Positionen',
+              style: TextStyle(
+                  color: onSurface, fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 12),
+          Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
@@ -967,6 +917,8 @@ class _TopFlopCard extends ConsumerWidget {
                     name: p.$1, pct: p.$2, dotColor: p.$3, isTop: false)),
               ],
             ),
+          ),
+        ],
           ),
         ],
       ),
