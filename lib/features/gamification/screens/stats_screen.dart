@@ -23,34 +23,80 @@ class StatsScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final profileAsync = ref.watch(gamificationProfileProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0D0F14),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0D0F14),
-        title: const Text('Meine Statistiken'),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+    final onSurface = theme.colorScheme.onSurface;
+    final outline = theme.colorScheme.outline;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      body: profileAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Fehler: $e')),
-        data: (profile) {
-          if (profile == null) {
-            return Center(
-              child:
-                  Text('Noch keine Daten', style: theme.textTheme.bodyMedium),
-            );
-          }
+      child: Column(
+        children: [
+          // ── Drag handle + title ──────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+            child: Column(
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: outline.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Meine Statistiken',
+                        style: TextStyle(
+                          color: onSurface,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Deine Finanzen im Überblick',
+                        style: TextStyle(
+                          color: onSurface.withValues(alpha: 0.4),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          // ── Content ─────────────────────────────────────────────────────
+          Expanded(
+            child: profileAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Fehler: $e')),
+              data: (profile) {
+                if (profile == null) {
+                  return Center(
+                    child: Text('Noch keine Daten',
+                        style: theme.textTheme.bodyMedium),
+                  );
+                }
 
-          final daysActive =
-              DateTime.now().difference(profile.createdAt).inDays + 1;
-          final badgeCount = profile.unlockedBadgeIds.length;
+                final daysActive =
+                    DateTime.now().difference(profile.createdAt).inDays + 1;
+                final badgeCount = profile.unlockedBadgeIds.length;
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
-            children: [
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+                  children: [
               // ── Quick stat tiles ───────────────────────────────────────────
               Row(
                 children: [
@@ -58,9 +104,9 @@ class StatsScreen extends ConsumerWidget {
                     child: _StatTile(
                       label: 'Abzeichen',
                       value: '$badgeCount',
-                      sub: 'von 32',
+                      sub: 'von 104',
                       icon: Icons.military_tech_outlined,
-                      color: AppColors.darkPrimary,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -70,7 +116,7 @@ class StatsScreen extends ConsumerWidget {
                       value: '$daysActive',
                       sub: daysActive == 1 ? 'Tag' : 'Tagen',
                       icon: Icons.calendar_today_outlined,
-                      color: AppColors.darkPrimary,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
                 ],
@@ -84,7 +130,7 @@ class StatsScreen extends ConsumerWidget {
                       value: '${profile.updateCount}',
                       sub: 'insgesamt',
                       icon: Icons.refresh_outlined,
-                      color: AppColors.darkPrimary,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -129,9 +175,12 @@ class StatsScreen extends ConsumerWidget {
                 icon: Icons.stacked_line_chart_outlined,
                 child: _CategoryGrowthCard(),
               ),
-            ],
-          );
-        },
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -209,54 +258,59 @@ class _ProCard extends ConsumerWidget {
             Positioned.fill(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  color: const Color(0xCC0D0F14),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.06),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.12)),
-                          ),
-                          child: const Icon(Icons.lock_outline,
-                              color: Colors.white54, size: 28),
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 3),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFD4A017), Color(0xFFB8860B)],
+                child: Builder(builder: (ctx) {
+                  final surface = Theme.of(ctx).colorScheme.surface;
+                  final onSurface = Theme.of(ctx).colorScheme.onSurface;
+                  final outline = Theme.of(ctx).colorScheme.outline;
+                  return Container(
+                    color: surface.withValues(alpha: 0.88),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: onSurface.withValues(alpha: 0.06),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: outline.withValues(alpha: 0.15)),
                             ),
-                            borderRadius: BorderRadius.circular(6),
+                            child: Icon(Icons.lock_outline,
+                                color: onSurface.withValues(alpha: 0.54), size: 28),
                           ),
-                          child: const Text(
-                            'PRO FEATURE',
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFD4A017), Color(0xFFB8860B)],
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'PRO FEATURE',
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            description,
                             style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1,
-                            ),
+                                color: onSurface.withValues(alpha: 0.4), fontSize: 11),
+                            textAlign: TextAlign.center,
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          description,
-                          style: const TextStyle(
-                              color: Colors.white38, fontSize: 11),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                }),
               ),
             ),
         ],
@@ -268,71 +322,74 @@ class _ProCard extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
-        decoration: const BoxDecoration(
-          color: Color(0xFF161B22),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFD4A017), Color(0xFFB8860B)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final onSurface = theme.colorScheme.onSurface;
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.workspace_premium,
-                  color: Colors.black, size: 36),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'FinTrack PRO',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Diese Analyse ist Teil von FinTrack Pro.\nWir arbeiten daran — bald verfügbar!',
-              style:
-                  TextStyle(color: Colors.white60, fontSize: 14, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.darkPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFD4A017), Color(0xFFB8860B)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Text('Verstanden',
-                    style:
-                        TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                child: const Icon(Icons.workspace_premium,
+                    color: Colors.black, size: 36),
               ),
-            ),
-          ],
-        ),
-      ),
+              const SizedBox(height: 16),
+              Text(
+                'FinTrack PRO',
+                style: TextStyle(
+                    color: onSurface,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Diese Analyse ist Teil von FinTrack Pro.\nWir arbeiten daran — bald verfügbar!',
+                style: TextStyle(
+                    color: onSurface.withValues(alpha: 0.6), fontSize: 14, height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Verstanden',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -369,18 +426,21 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
     final values = [giro, festgeld, etf, crypto, assets];
     final total = values.fold(0.0, (s, v) => s + (v > 0 ? v : 0));
 
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final outline = Theme.of(context).colorScheme.outline;
+
     if (total <= 0) {
       return Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
+          color: onSurface.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white10),
+          border: Border.all(color: outline.withValues(alpha: 0.12)),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'Noch keine Positionen vorhanden',
-            style: TextStyle(color: Colors.white38, fontSize: 13),
+            style: TextStyle(color: onSurface.withValues(alpha: 0.38), fontSize: 13),
           ),
         ),
       );
@@ -403,9 +463,9 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: onSurface.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: outline.withValues(alpha: 0.12)),
       ),
       child: Column(
         children: [
@@ -454,8 +514,8 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
                             const SizedBox(height: 6),
                             Text(
                               CurrencyFormatter.format(values[_touchedIndex]),
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: onSurface,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -464,7 +524,7 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
                             Text(
                               '${(values[_touchedIndex] / total * 100).toStringAsFixed(1)}%',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.55),
+                                color: onSurface.withValues(alpha: 0.55),
                                 fontSize: 11,
                               ),
                             ),
@@ -499,7 +559,7 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
                   const SizedBox(width: 4),
                   Text(
                     categories[i].$1,
-                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    style: TextStyle(color: onSurface.withValues(alpha: 0.54), fontSize: 11),
                   ),
                 ],
               );
@@ -509,23 +569,25 @@ class _AllocationPieChartState extends ConsumerState<_AllocationPieChart> {
           // Schulden badge
           if (schulden < 0) ...[
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.darkSecondary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: AppColors.darkSecondary.withValues(alpha: 0.3)),
-              ),
-              child: Text(
-                'Abzgl. Schulden: ${CurrencyFormatter.format(schulden)}',
-                style: const TextStyle(
-                  color: AppColors.darkSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+            Builder(builder: (ctx) {
+              final sec = AppColors.secondary(ctx);
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: sec.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: sec.withValues(alpha: 0.3)),
                 ),
-              ),
-            ),
+                child: Text(
+                  'Abzgl. Schulden: ${CurrencyFormatter.format(schulden)}',
+                  style: TextStyle(
+                    color: sec,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              );
+            }),
           ],
         ],
       ),
@@ -576,19 +638,21 @@ class _ProfitabilityCard extends ConsumerWidget {
     final maxAbs =
         positions.fold(0.0, (m, p) => p.$2.abs() > m ? p.$2.abs() : m);
 
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final outline = Theme.of(context).colorScheme.outline;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: onSurface.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: outline.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Investitions-Profitabilität',
+          Text('Investitions-Profitabilität',
               style: TextStyle(
-                  color: Colors.white,
+                  color: onSurface,
                   fontSize: 14,
                   fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
@@ -596,7 +660,7 @@ class _ProfitabilityCard extends ConsumerWidget {
             final (name, pct, color) = p;
             final isPos = pct >= 0;
             final barColor =
-                isPos ? AppColors.darkPositive : AppColors.darkSecondary;
+                isPos ? AppColors.positive(context) : AppColors.secondary(context);
             final barFrac = maxAbs == 0 ? 0.0 : pct.abs() / maxAbs;
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -605,8 +669,8 @@ class _ProfitabilityCard extends ConsumerWidget {
                   SizedBox(
                     width: 60,
                     child: Text(name,
-                        style: const TextStyle(
-                            color: Colors.white60, fontSize: 11),
+                        style: TextStyle(
+                            color: onSurface.withValues(alpha: 0.6), fontSize: 11),
                         overflow: TextOverflow.ellipsis),
                   ),
                   const SizedBox(width: 8),
@@ -618,7 +682,7 @@ class _ProfitabilityCard extends ConsumerWidget {
                           Container(
                             height: 18,
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.05),
+                              color: onSurface.withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -636,7 +700,8 @@ class _ProfitabilityCard extends ConsumerWidget {
                           Positioned(
                             left: half - 0.5,
                             child: Container(
-                                width: 1, height: 18, color: Colors.white12),
+                                width: 1, height: 18,
+                                color: outline.withValues(alpha: 0.15)),
                           ),
                         ],
                       );
@@ -671,10 +736,10 @@ class _RiskProfileCard extends ConsumerWidget {
 
   static (String, Color) _label(double score) {
     if (score < 0.15) return ('Konservativ', Color(0xFF3F8ACB));
-    if (score < 0.35) return ('Ausgewogen', AppColors.darkPositive);
+    if (score < 0.35) return ('Ausgewogen', Color(0xFF4ADE80));
     if (score < 0.55) return ('Wachstum', Color(0xFFF39C12));
     if (score < 0.75) return ('Offensiv', Color(0xFFE67E22));
-    return ('Spekulativ', AppColors.darkSecondary);
+    return ('Spekulativ', Color(0xFFFF6B6B));
   }
 
   @override
@@ -703,21 +768,23 @@ class _RiskProfileCard extends ConsumerWidget {
     const names = ['Giro', 'Festgeld', 'ETF & Aktien', 'Krypto', 'Sachwerte'];
     const colors = [_cGiro, _cFestgeld, _cEtf, _cCrypto, _cPhysical];
 
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final outline = Theme.of(context).colorScheme.outline;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: onSurface.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: outline.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text('Risikoprofil',
+              Text('Risikoprofil',
                   style: TextStyle(
-                      color: Colors.white,
+                      color: onSurface,
                       fontSize: 14,
                       fontWeight: FontWeight.w600)),
               const Spacer(),
@@ -745,10 +812,10 @@ class _RiskProfileCard extends ConsumerWidget {
               decoration: const BoxDecoration(
                 gradient: LinearGradient(colors: [
                   Color(0xFF3F8ACB),
-                  AppColors.darkPositive,
+                  Color(0xFF4ADE80),
                   Color(0xFFF39C12),
                   Color(0xFFE67E22),
-                  AppColors.darkSecondary,
+                  Color(0xFFFF6B6B),
                 ]),
               ),
             ),
@@ -759,17 +826,17 @@ class _RiskProfileCard extends ConsumerWidget {
             alignment: Alignment.centerLeft,
             child: Align(
               alignment: Alignment.topRight,
-              child: Container(width: 2, height: 8, color: Colors.white70),
+              child: Container(width: 2, height: 8, color: onSurface.withValues(alpha: 0.7)),
             ),
           ),
           const SizedBox(height: 2),
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Konservativ',
-                  style: TextStyle(color: Colors.white38, fontSize: 10)),
+                  style: TextStyle(color: onSurface.withValues(alpha: 0.38), fontSize: 10)),
               Text('Spekulativ',
-                  style: TextStyle(color: Colors.white38, fontSize: 10)),
+                  style: TextStyle(color: onSurface.withValues(alpha: 0.38), fontSize: 10)),
             ],
           ),
           const SizedBox(height: 14),
@@ -787,12 +854,11 @@ class _RiskProfileCard extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(names[i],
-                        style: const TextStyle(
-                            color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(
+                            color: onSurface.withValues(alpha: 0.6), fontSize: 12)),
                   ),
                   Text('${(positives[i] / total * 100).toStringAsFixed(1)}%',
-                      style:
-                          const TextStyle(color: Colors.white54, fontSize: 11)),
+                      style: TextStyle(color: onSurface.withValues(alpha: 0.54), fontSize: 11)),
                 ],
               ),
             );
@@ -846,12 +912,16 @@ class _TopFlopCard extends ConsumerWidget {
     final top = positions.take(3).toList();
     final flop = positions.reversed.take(3).toList();
 
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final outline = Theme.of(context).colorScheme.outline;
+    final posColor = AppColors.positive(context);
+    final secColor = AppColors.secondary(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: onSurface.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: outline.withValues(alpha: 0.12)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -860,13 +930,12 @@ class _TopFlopCard extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(children: [
-                  Icon(Icons.arrow_upward,
-                      color: AppColors.darkPositive, size: 14),
-                  SizedBox(width: 4),
+                Row(children: [
+                  Icon(Icons.arrow_upward, color: posColor, size: 14),
+                  const SizedBox(width: 4),
                   Text('Top',
                       style: TextStyle(
-                          color: AppColors.darkPositive,
+                          color: posColor,
                           fontSize: 13,
                           fontWeight: FontWeight.w700)),
                 ]),
@@ -878,19 +947,18 @@ class _TopFlopCard extends ConsumerWidget {
           ),
           Container(
               width: 1,
-              color: Colors.white10,
+              color: outline.withValues(alpha: 0.15),
               margin: const EdgeInsets.symmetric(horizontal: 12)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(children: [
-                  Icon(Icons.arrow_downward,
-                      color: AppColors.darkSecondary, size: 14),
-                  SizedBox(width: 4),
+                Row(children: [
+                  Icon(Icons.arrow_downward, color: secColor, size: 14),
+                  const SizedBox(width: 4),
                   Text('Flop',
                       style: TextStyle(
-                          color: AppColors.darkSecondary,
+                          color: secColor,
                           fontSize: 13,
                           fontWeight: FontWeight.w700)),
                 ]),
@@ -919,7 +987,8 @@ class _TopFlopRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = isTop ? AppColors.darkPositive : AppColors.darkSecondary;
+    final c = isTop ? AppColors.positive(context) : AppColors.secondary(context);
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -932,7 +1001,7 @@ class _TopFlopRow extends StatelessWidget {
           const SizedBox(width: 6),
           Expanded(
             child: Text(name,
-                style: const TextStyle(color: Colors.white60, fontSize: 11),
+                style: TextStyle(color: onSurface.withValues(alpha: 0.6), fontSize: 11),
                 overflow: TextOverflow.ellipsis),
           ),
           Text(
@@ -987,24 +1056,26 @@ class _CategoryGrowthCard extends ConsumerWidget {
           );
         }).toList();
 
+        final onSurface = Theme.of(context).colorScheme.onSurface;
+        final outline = Theme.of(context).colorScheme.outline;
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.04),
+            color: onSurface.withValues(alpha: 0.04),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white10),
+            border: Border.all(color: outline.withValues(alpha: 0.12)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Kategorie-Entwicklung',
+              Text('Kategorie-Entwicklung',
                   style: TextStyle(
-                      color: Colors.white,
+                      color: onSurface,
                       fontSize: 14,
                       fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
-              const Text('Letzte 6 Monate',
-                  style: TextStyle(color: Colors.white38, fontSize: 11)),
+              Text('Letzte 6 Monate',
+                  style: TextStyle(color: onSurface.withValues(alpha: 0.38), fontSize: 11)),
               const SizedBox(height: 12),
               SizedBox(
                 height: 160,
@@ -1014,7 +1085,7 @@ class _CategoryGrowthCard extends ConsumerWidget {
                       show: true,
                       drawVerticalLine: false,
                       getDrawingHorizontalLine: (_) => FlLine(
-                        color: Colors.white.withValues(alpha: 0.05),
+                        color: outline.withValues(alpha: 0.15),
                         strokeWidth: 1,
                       ),
                     ),
@@ -1039,8 +1110,8 @@ class _CategoryGrowthCard extends ConsumerWidget {
                           color: cfg.$3,
                           margin: const EdgeInsets.only(right: 4)),
                       Text(cfg.$1,
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 10)),
+                          style: TextStyle(
+                              color: onSurface.withValues(alpha: 0.54), fontSize: 10)),
                     ],
                   );
                 }).toList(),
@@ -1055,21 +1126,31 @@ class _CategoryGrowthCard extends ConsumerWidget {
 
 // ── Shared empty-state card ───────────────────────────────────────────────────
 
-Widget _emptyCard(String message) {
-  return Container(
-    padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.04),
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.white10),
-    ),
-    child: Center(
-      child: Text(message,
-          style: const TextStyle(color: Colors.white38, fontSize: 13),
-          textAlign: TextAlign.center),
-    ),
-  );
+class _EmptyCard extends StatelessWidget {
+  const _EmptyCard(this.message);
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final outline = Theme.of(context).colorScheme.outline;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+      decoration: BoxDecoration(
+        color: onSurface.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: outline.withValues(alpha: 0.12)),
+      ),
+      child: Center(
+        child: Text(message,
+            style: TextStyle(color: onSurface.withValues(alpha: 0.38), fontSize: 13),
+            textAlign: TextAlign.center),
+      ),
+    );
+  }
 }
+
+Widget _emptyCard(String message) => _EmptyCard(message);
 
 // ── Gamification card ─────────────────────────────────────────────────────────
 
@@ -1091,12 +1172,14 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final outline = Theme.of(context).colorScheme.outline;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: onSurface.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: outline.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1107,10 +1190,10 @@ class _StatTile extends StatelessWidget {
               style: TextStyle(
                   fontSize: 24, fontWeight: FontWeight.w700, color: color)),
           Text(sub,
-              style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              style: TextStyle(color: onSurface.withValues(alpha: 0.38), fontSize: 11)),
           const SizedBox(height: 4),
           Text(label,
-              style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              style: TextStyle(color: onSurface.withValues(alpha: 0.54), fontSize: 12)),
         ],
       ),
     );

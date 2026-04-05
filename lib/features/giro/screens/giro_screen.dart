@@ -148,7 +148,7 @@ class _GiroCard extends ConsumerWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: AppColors.darkSecondary,
+          color: Theme.of(context).colorScheme.error,
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white),
@@ -181,8 +181,8 @@ class _GiroCard extends ConsumerWidget {
                 CurrencyFormatter.format(account.balance),
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: account.balance >= 0
-                      ? AppColors.darkPositive
-                      : AppColors.darkSecondary,
+                      ? AppColors.positive(context)
+                      : AppColors.secondary(context),
                   fontWeight: FontWeight.w700,
                 ),
               ),

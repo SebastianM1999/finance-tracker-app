@@ -180,10 +180,10 @@ class _FestgeldCard extends ConsumerWidget {
 
   /// Single color used for bar, left accent, and bottom chip.
   /// Red is reserved exclusively for expired cards.
-  Color? _urgencyColor(bool isExpired, double progress) {
-    if (isExpired) return AppColors.darkSecondary;
+  Color? _urgencyColor(BuildContext context, bool isExpired, double progress) {
+    if (isExpired) return AppColors.secondary(context);
     if (progress >= 0.90) return const Color(0xFF4FC770);
-    if (progress >= 0.75) return AppColors.darkPositive;
+    if (progress >= 0.75) return AppColors.positive(context);
     return null; // not urgent yet
   }
 
@@ -194,8 +194,8 @@ class _FestgeldCard extends ConsumerWidget {
     final isExpired = daysLeft < 0;
     final daysLabel = DateFormatter.daysRemaining(item.endDate);
 
-    final urgency = _urgencyColor(isExpired, item.progress);
-    final barColor = urgency ?? AppColors.darkPrimary;
+    final urgency = _urgencyColor(context, isExpired, item.progress);
+    final barColor = urgency ?? theme.colorScheme.primary;
     final showAccent = urgency != null;
     final statusColor = urgency; // chip only shown when urgency != null
 
@@ -206,7 +206,7 @@ class _FestgeldCard extends ConsumerWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: AppColors.darkSecondary,
+          color: theme.colorScheme.error,
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white),
@@ -297,7 +297,7 @@ class _FestgeldCard extends ConsumerWidget {
                                     '→ ${CurrencyFormatter.format(item.projectedPayout)}',
                                     style: theme.textTheme.bodySmall
                                         ?.copyWith(
-                                            color: AppColors.darkPositive),
+                                            color: AppColors.positive(context)),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ],

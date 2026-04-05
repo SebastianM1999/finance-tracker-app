@@ -18,11 +18,13 @@ class ToolInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(color: Colors.white60, fontSize: 13)),
+            style: TextStyle(color: AppColors.textSecondary(context), fontSize: 13)),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
@@ -31,26 +33,24 @@ class ToolInputField extends StatelessWidget {
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
           ],
-          style: const TextStyle(color: Colors.white, fontSize: 15),
+          style: TextStyle(color: onSurface, fontSize: 15),
           decoration: InputDecoration(
             filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.06),
+            fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              borderSide: BorderSide(color: theme.colorScheme.outline),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              borderSide: BorderSide(color: theme.colorScheme.outline),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(
-                  color: AppColors.darkPrimary.withValues(alpha: 0.6)),
+                  color: theme.colorScheme.primary, width: 1.5),
             ),
           ),
         ),
@@ -72,25 +72,27 @@ class ToolIntervalChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final outline = Theme.of(context).colorScheme.outline;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: selected
-              ? AppColors.darkPrimary.withValues(alpha: 0.2)
-              : Colors.white.withValues(alpha: 0.05),
+              ? primary.withValues(alpha: 0.12)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: selected
-                ? AppColors.darkPrimary.withValues(alpha: 0.5)
-                : Colors.white.withValues(alpha: 0.08),
+                ? primary.withValues(alpha: 0.5)
+                : outline.withValues(alpha: 0.4),
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? AppColors.darkPrimary : Colors.white54,
+            color: selected ? primary : AppColors.textSecondary(context),
             fontSize: 12,
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
           ),
@@ -117,7 +119,7 @@ class ToolResultRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label,
-            style: const TextStyle(color: Colors.white54, fontSize: 13)),
+            style: TextStyle(color: AppColors.textSecondary(context), fontSize: 13)),
         Text(value,
             style: TextStyle(
                 color: color, fontSize: 13, fontWeight: FontWeight.w600)),

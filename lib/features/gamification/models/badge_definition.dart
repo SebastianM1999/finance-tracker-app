@@ -159,6 +159,18 @@ const List<BadgeDefinition> kAllBadges = [
   BadgeDefinition(id: 't_age_gold', missionId: 't_age', category: BadgeCategory.dabeiSeit, tier: GamificationTier.gold, name: 'Ernsthaft dabei', description: 'App seit 3 Monaten genutzt'),
   BadgeDefinition(id: 't_age_diamond', missionId: 't_age', category: BadgeCategory.dabeiSeit, tier: GamificationTier.diamond, name: 'Langstrecke', description: 'App seit 1 Jahr genutzt'),
 
+  // Mission: t_xp — Fleißig
+  BadgeDefinition(id: 't_xp_bronze', missionId: 't_xp', category: BadgeCategory.dabeiSeit, tier: GamificationTier.bronze, name: 'Erste Schritte', description: '3 Aktualisierungen'),
+  BadgeDefinition(id: 't_xp_silver', missionId: 't_xp', category: BadgeCategory.dabeiSeit, tier: GamificationTier.silver, name: 'Fleißig', description: '10 Aktualisierungen'),
+  BadgeDefinition(id: 't_xp_gold', missionId: 't_xp', category: BadgeCategory.dabeiSeit, tier: GamificationTier.gold, name: 'Engagiert', description: '30 Aktualisierungen'),
+  BadgeDefinition(id: 't_xp_diamond', missionId: 't_xp', category: BadgeCategory.dabeiSeit, tier: GamificationTier.diamond, name: 'Daten-Profi', description: '75 Aktualisierungen'),
+
+  // Mission: t_level — Badge-Sammler
+  BadgeDefinition(id: 't_level_bronze', missionId: 't_level', category: BadgeCategory.dabeiSeit, tier: GamificationTier.bronze, name: 'Medaillen-Starter', description: '10 Medaillen-Stufen erreicht'),
+  BadgeDefinition(id: 't_level_silver', missionId: 't_level', category: BadgeCategory.dabeiSeit, tier: GamificationTier.silver, name: 'Medaillen-Sammler', description: '25 Medaillen-Stufen erreicht'),
+  BadgeDefinition(id: 't_level_gold', missionId: 't_level', category: BadgeCategory.dabeiSeit, tier: GamificationTier.gold, name: 'Medaillen-Jäger', description: '50 Medaillen-Stufen erreicht'),
+  BadgeDefinition(id: 't_level_diamond', missionId: 't_level', category: BadgeCategory.dabeiSeit, tier: GamificationTier.diamond, name: 'Medaillen-Legende', description: '80 Medaillen-Stufen erreicht'),
+
 
   // ── 🐷 Festgeld ──────────────────────────────────────────────────────────────
   // Mission: fg_count — Anleger

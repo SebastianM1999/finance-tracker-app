@@ -56,7 +56,7 @@ class SchuldenScreen extends ConsumerWidget {
                     if (iOwe.isNotEmpty) ...[
                       _SectionHeader(
                         label: 'Ich schulde',
-                        color: AppColors.darkSecondary,
+                        color: AppColors.secondary(context),
                         total: iOwe.fold(0.0, (s, d) => s + d.amount),
                       ),
                       const SizedBox(height: 8),
@@ -80,7 +80,7 @@ class SchuldenScreen extends ConsumerWidget {
                       if (iOwe.isNotEmpty) const SizedBox(height: 8),
                       _SectionHeader(
                         label: 'Mir wird geschuldet',
-                        color: AppColors.darkPositive,
+                        color: AppColors.positive(context),
                         total: owedToMe.fold(0.0, (s, d) => s + d.amount),
                       ),
                       const SizedBox(height: 8),
@@ -268,7 +268,7 @@ class _SchuldCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final color =
-        schuld.iOwe ? AppColors.darkSecondary : AppColors.darkPositive;
+        schuld.iOwe ? AppColors.secondary(context) : AppColors.positive(context);
     final isOverdue = schuld.dueDate != null &&
         schuld.dueDate!.isBefore(DateTime.now());
 
@@ -279,7 +279,7 @@ class _SchuldCard extends ConsumerWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: AppColors.darkSecondary,
+          color: theme.colorScheme.error,
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white),
@@ -336,8 +336,8 @@ class _SchuldCard extends ConsumerWidget {
                           'Fällig: ${DateFormatter.format(schuld.dueDate!)}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: isOverdue
-                                ? AppColors.darkSecondary
-                                : AppColors.darkWarning,
+                                ? AppColors.secondary(context)
+                                : AppColors.warning(context),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -575,14 +575,14 @@ class _SchuldSheetState extends ConsumerState<_SchuldSheet> {
                   _TypeButton(
                     label: 'Ich schulde',
                     selected: _type == 'I_OWE',
-                    selectedColor: AppColors.darkSecondary,
+                    selectedColor: AppColors.secondary(context),
                     onTap: () => setState(() => _type = 'I_OWE'),
                   ),
                   const SizedBox(width: 8),
                   _TypeButton(
                     label: 'Mir geschuldet',
                     selected: _type == 'OWED_TO_ME',
-                    selectedColor: AppColors.darkPositive,
+                    selectedColor: AppColors.positive(context),
                     onTap: () => setState(() => _type = 'OWED_TO_ME'),
                   ),
                 ],

@@ -12,6 +12,7 @@ class GamificationProfile {
     required this.matureCount,
     required this.createdAt,
     required this.lastCheckedAt,
+    this.lastUpdateCountedAt,
     this.badgeUnlockedAt = const {},
   });
 
@@ -26,6 +27,9 @@ class GamificationProfile {
 
   final DateTime createdAt;
   final DateTime lastCheckedAt;
+
+  /// Last time updateCount was incremented — used to enforce the 12h cooldown.
+  final DateTime? lastUpdateCountedAt;
 
   /// When each badge was first unlocked. Key = badge ID, value = unlock time.
   final Map<String, DateTime> badgeUnlockedAt;
@@ -65,6 +69,9 @@ class GamificationProfile {
       lastCheckedAt: d['lastCheckedAt'] != null
           ? (d['lastCheckedAt'] as Timestamp).toDate()
           : DateTime.now(),
+      lastUpdateCountedAt: d['lastUpdateCountedAt'] != null
+          ? (d['lastUpdateCountedAt'] as Timestamp).toDate()
+          : null,
       badgeUnlockedAt: (d['badgeUnlockedAt'] as Map<String, dynamic>?)?.map(
             (k, v) => MapEntry(k, (v as Timestamp).toDate()),
           ) ??
@@ -79,6 +86,8 @@ class GamificationProfile {
         'matureCount': matureCount,
         'createdAt': Timestamp.fromDate(createdAt),
         'lastCheckedAt': Timestamp.fromDate(lastCheckedAt),
+        if (lastUpdateCountedAt != null)
+          'lastUpdateCountedAt': Timestamp.fromDate(lastUpdateCountedAt!),
         'badgeUnlockedAt':
             badgeUnlockedAt.map((k, v) => MapEntry(k, Timestamp.fromDate(v))),
       };
@@ -89,6 +98,7 @@ class GamificationProfile {
     int? paidOffDebts,
     int? matureCount,
     DateTime? lastCheckedAt,
+    DateTime? lastUpdateCountedAt,
     Map<String, DateTime>? badgeUnlockedAt,
   }) =>
       GamificationProfile(
@@ -98,6 +108,7 @@ class GamificationProfile {
         matureCount: matureCount ?? this.matureCount,
         createdAt: createdAt,
         lastCheckedAt: lastCheckedAt ?? this.lastCheckedAt,
+        lastUpdateCountedAt: lastUpdateCountedAt ?? this.lastUpdateCountedAt,
         badgeUnlockedAt: badgeUnlockedAt ?? this.badgeUnlockedAt,
       );
 }

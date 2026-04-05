@@ -131,9 +131,9 @@ class _MissionCardState extends State<MissionCard>
                 size: 86,
                 opacity: 0.15,
               ),
-              const Icon(
+              Icon(
                 Icons.lock,
-                color: Colors.white38,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.35),
                 size: 22,
               ),
             ],
@@ -240,9 +240,9 @@ class _MissionCardState extends State<MissionCard>
           textAlign: TextAlign.center,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
             height: 1.2,
           ),
@@ -271,7 +271,7 @@ class _TierDots extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isUnlocked ? tier.tier.primaryColor : Colors.white12,
+            color: isUnlocked ? tier.tier.primaryColor : Theme.of(context).colorScheme.onSurface.withOpacity(0.12),
             boxShadow: isUnlocked
                 ? [
                     BoxShadow(

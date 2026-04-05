@@ -124,7 +124,7 @@ class _RangeSelector extends ConsumerWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.darkBorder),
+        border: Border.all(color: theme.colorScheme.outline),
       ),
       child: Row(
         children: _options.map(((int, String) opt) {
@@ -139,7 +139,7 @@ class _RangeSelector extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppColors.darkPrimary
+                      ? theme.colorScheme.primary
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -182,24 +182,21 @@ class _ChangeBadge extends StatelessWidget {
 
     final label = _rangeLabel(days);
 
+    final posColor = isPos ? AppColors.positive(context) : AppColors.secondary(context);
+    final textSecondary = AppColors.textSecondary(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: (isPos ? AppColors.darkPositive : AppColors.darkSecondary)
-            .withValues(alpha: 0.1),
+        color: posColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: (isPos ? AppColors.darkPositive : AppColors.darkSecondary)
-              .withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: posColor.withValues(alpha: 0.25)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
-            style: const TextStyle(
-                color: AppColors.darkTextSecondary, fontSize: 13),
+            style: TextStyle(color: textSecondary, fontSize: 13),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -207,17 +204,14 @@ class _ChangeBadge extends StatelessWidget {
               Text(
                 CurrencyFormatter.formatPnl(absolute),
                 style: TextStyle(
-                  color: isPos ? AppColors.darkPositive : AppColors.darkSecondary,
+                  color: posColor,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
               ),
               Text(
                 CurrencyFormatter.formatPercent(percent),
-                style: TextStyle(
-                  color: isPos ? AppColors.darkPositive : AppColors.darkSecondary,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: posColor, fontSize: 12),
               ),
             ],
           ),
@@ -269,19 +263,19 @@ class _HistoryChartState extends State<_HistoryChart> {
   Widget build(BuildContext context) {
     final history = widget.history;
 
+    final theme = Theme.of(context);
     if (history.length < 2) {
       return Container(
         height: 220,
         decoration: BoxDecoration(
-          color: AppColors.darkSurface,
+          color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.darkBorder),
+          border: Border.all(color: theme.colorScheme.outline),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'Noch nicht genug Daten',
-            style: TextStyle(
-                color: AppColors.darkTextSecondary, fontSize: 13),
+            style: TextStyle(color: AppColors.textSecondary(context), fontSize: 13),
           ),
         ),
       );
@@ -310,15 +304,20 @@ class _HistoryChartState extends State<_HistoryChart> {
             ? history[_scrubIndex! - 1]
             : null;
 
+    final primaryColor = AppColors.primary(context);
+    final borderColor = AppColors.border(context);
+    final textSecondaryColor = AppColors.textSecondary(context);
+    final scrubLineColor = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4);
+
     return Stack(
       children: [
         Container(
           height: 260,
           padding: const EdgeInsets.fromLTRB(0, 16, 16, 8),
           decoration: BoxDecoration(
-            color: AppColors.darkSurface,
+            color: AppColors.surface(context),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.darkBorder),
+            border: Border.all(color: borderColor),
           ),
           child: LineChart(
             LineChartData(
@@ -331,7 +330,7 @@ class _HistoryChartState extends State<_HistoryChart> {
                           ? (maxY - minY + 2 * padding) / 4
                           : 1,
                       getDrawingHorizontalLine: (_) => FlLine(
-                        color: AppColors.darkBorder,
+                        color: borderColor,
                         strokeWidth: 0.8,
                       ),
                     ),
@@ -340,7 +339,7 @@ class _HistoryChartState extends State<_HistoryChart> {
                             verticalLines: [
                               VerticalLine(
                                 x: _scrubIndex!.toDouble(),
-                                color: Colors.white.withValues(alpha: 0.45),
+                                color: scrubLineColor,
                                 strokeWidth: 1.5,
                                 dashArray: [4, 4],
                               ),
@@ -356,8 +355,8 @@ class _HistoryChartState extends State<_HistoryChart> {
                             padding: const EdgeInsets.only(right: 6),
                             child: Text(
                               _fmtY(value),
-                              style: const TextStyle(
-                                color: AppColors.darkTextSecondary,
+                              style: TextStyle(
+                                color: textSecondaryColor,
                                 fontSize: 10,
                               ),
                               textAlign: TextAlign.right,
@@ -380,8 +379,8 @@ class _HistoryChartState extends State<_HistoryChart> {
                               padding: const EdgeInsets.only(top: 6),
                               child: Text(
                                 _axisDate.format(history[i].recordedAt),
-                                style: const TextStyle(
-                                  color: AppColors.darkTextSecondary,
+                                style: TextStyle(
+                                  color: textSecondaryColor,
                                   fontSize: 10,
                                 ),
                               ),
@@ -400,7 +399,7 @@ class _HistoryChartState extends State<_HistoryChart> {
                       LineChartBarData(
                         spots: spots,
                         isCurved: true,
-                        color: AppColors.darkPrimary,
+                        color: primaryColor,
                         barWidth: 2.5,
                         dotData: FlDotData(
                           show: scrubSnap != null,
@@ -409,7 +408,7 @@ class _HistoryChartState extends State<_HistoryChart> {
                           getDotPainter: (_, __, ___, ____) =>
                               FlDotCirclePainter(
                             radius: 4.5,
-                            color: AppColors.darkPrimary,
+                            color: primaryColor,
                             strokeWidth: 2,
                             strokeColor: Colors.white,
                           ),
@@ -420,8 +419,8 @@ class _HistoryChartState extends State<_HistoryChart> {
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              AppColors.darkPrimary.withValues(alpha: 0.3),
-                              AppColors.darkPrimary.withValues(alpha: 0.0),
+                              primaryColor.withValues(alpha: 0.25),
+                              primaryColor.withValues(alpha: 0.0),
                             ],
                           ),
                         ),
@@ -478,15 +477,17 @@ class _ScrubInfoCard extends StatelessWidget {
         previous != null ? snapshot.totalNetWorth - previous!.totalNetWorth : null;
     final isPos = change == null || change >= 0;
 
+    final theme = Theme.of(context);
+    final textSecondary = AppColors.textSecondary(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.darkBorder),
+        border: Border.all(color: theme.colorScheme.outline),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -497,17 +498,14 @@ class _ScrubInfoCard extends StatelessWidget {
         children: [
           Text(
             dateFmt.format(snapshot.recordedAt),
-            style: const TextStyle(
-              color: AppColors.darkTextSecondary,
-              fontSize: 11,
-            ),
+            style: TextStyle(color: textSecondary, fontSize: 11),
           ),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               CurrencyFormatter.format(snapshot.totalNetWorth),
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: theme.colorScheme.onSurface,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -520,7 +518,7 @@ class _ScrubInfoCard extends StatelessWidget {
               child: Text(
                 CurrencyFormatter.formatPnl(change),
                 style: TextStyle(
-                  color: isPos ? AppColors.darkPositive : AppColors.darkSecondary,
+                  color: isPos ? AppColors.positive(context) : AppColors.secondary(context),
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
@@ -558,7 +556,7 @@ class _SnapshotTile extends StatelessWidget {
             ? null
             : Icon(
                 isUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                color: isUp ? AppColors.darkPositive : AppColors.darkSecondary,
+                color: isUp ? AppColors.positive(context) : AppColors.secondary(context),
                 size: 20,
               ),
         title: Text(
@@ -685,7 +683,7 @@ class _SnapshotDetailSheet extends StatelessWidget {
                       Text(
                         CurrencyFormatter.format(snapshot.totalNetWorth),
                         style: theme.textTheme.titleLarge?.copyWith(
-                          color: AppColors.darkPrimary,
+                          color: theme.colorScheme.primary,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -706,7 +704,7 @@ class _SnapshotDetailSheet extends StatelessWidget {
                   // Category breakdown
                   Text('Aufteilung',
                       style: theme.textTheme.labelLarge?.copyWith(
-                          color: AppColors.darkTextSecondary)),
+                          color: AppColors.textSecondary(context))),
                   const SizedBox(height: 10),
                   ...breakdownRows.map(
                     (row) {
@@ -737,7 +735,7 @@ class _SnapshotDetailSheet extends StatelessWidget {
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w600,
                                 color: value < 0
-                                    ? AppColors.darkSecondary
+                                    ? AppColors.secondary(context)
                                     : null,
                               ),
                             ),
@@ -755,7 +753,7 @@ class _SnapshotDetailSheet extends StatelessWidget {
                     Text(
                       'Positionen (${snapshot.positions.length})',
                       style: theme.textTheme.labelLarge?.copyWith(
-                          color: AppColors.darkTextSecondary),
+                          color: AppColors.textSecondary(context)),
                     ),
                     const SizedBox(height: 10),
                     ...snapshot.positions.map(
@@ -768,7 +766,7 @@ class _SnapshotDetailSheet extends StatelessWidget {
                               height: 8,
                               margin: const EdgeInsets.only(right: 10, top: 2),
                               decoration: BoxDecoration(
-                                color: AppColors.darkPrimary
+                                color: AppColors.primary(context)
                                     .withValues(alpha: 0.6),
                                 shape: BoxShape.circle,
                               ),
@@ -784,7 +782,7 @@ class _SnapshotDetailSheet extends StatelessWidget {
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w600,
                                 color: p.value < 0
-                                    ? AppColors.darkSecondary
+                                    ? AppColors.secondary(context)
                                     : null,
                               ),
                             ),

@@ -89,10 +89,15 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
         .map((e) => FlSpot(e.key.toDouble(), e.value.$2))
         .toList();
 
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    final primary = theme.colorScheme.primary;
+    final outline = theme.colorScheme.outline;
+
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0F14),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: ListView(
         controller: widget.scrollController,
@@ -102,19 +107,19 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
             child: Container(
               width: 36, height: 4,
               decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: outline.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2)),
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Sparrechner',
+          Text('Sparrechner',
               style: TextStyle(
-                  color: Colors.white,
+                  color: onSurface,
                   fontSize: 20,
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          const Text('ETF & Fondssimulator',
-              style: TextStyle(color: Colors.white38, fontSize: 13)),
+          Text('ETF & Fondssimulator',
+              style: TextStyle(color: AppColors.textSecondary(context), fontSize: 13)),
           const SizedBox(height: 24),
 
           ToolInputField(
@@ -132,8 +137,8 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
           ),
           const SizedBox(height: 14),
 
-          const Text('Sparintervall',
-              style: TextStyle(color: Colors.white60, fontSize: 13)),
+          Text('Sparintervall',
+              style: TextStyle(color: AppColors.textSecondary(context), fontSize: 13)),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -173,16 +178,16 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.04),
+              color: onSurface.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: outline.withValues(alpha: 0.15)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Entwicklung',
+                Text('Entwicklung',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: onSurface,
                         fontSize: 13,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 12),
@@ -194,7 +199,7 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
                         show: true,
                         drawVerticalLine: false,
                         getDrawingHorizontalLine: (_) => FlLine(
-                          color: Colors.white.withValues(alpha: 0.05),
+                          color: outline.withValues(alpha: 0.15),
                           strokeWidth: 1,
                         ),
                       ),
@@ -212,8 +217,8 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
                                 max(1, (_laufzeit / 4).floorToDouble()),
                             getTitlesWidget: (value, _) => Text(
                               'J${value.toInt()}',
-                              style: const TextStyle(
-                                  color: Colors.white38, fontSize: 9),
+                              style: TextStyle(
+                                  color: onSurface.withValues(alpha: 0.38), fontSize: 9),
                             ),
                           ),
                         ),
@@ -224,7 +229,7 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
                         LineChartBarData(
                           spots: balanceSpots,
                           isCurved: true,
-                          color: AppColors.darkPrimary,
+                          color: primary,
                           barWidth: 2.5,
                           dotData: const FlDotData(show: false),
                           belowBarData: BarAreaData(
@@ -233,10 +238,8 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                AppColors.darkPrimary
-                                    .withValues(alpha: 0.25),
-                                AppColors.darkPrimary
-                                    .withValues(alpha: 0.0),
+                                primary.withValues(alpha: 0.25),
+                                primary.withValues(alpha: 0.0),
                               ],
                             ),
                           ),
@@ -244,7 +247,7 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
                         LineChartBarData(
                           spots: contributionSpots,
                           isCurved: false,
-                          color: Colors.white30,
+                          color: onSurface.withValues(alpha: 0.3),
                           barWidth: 1.5,
                           dotData: const FlDotData(show: false),
                           dashArray: [4, 4],
@@ -259,19 +262,19 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
                   children: [
                     Container(
                         width: 16, height: 3,
-                        color: AppColors.darkPrimary,
+                        color: primary,
                         margin: const EdgeInsets.only(right: 5)),
-                    const Text('Gesamtwert',
+                    Text('Gesamtwert',
                         style: TextStyle(
-                            color: Colors.white54, fontSize: 10)),
+                            color: onSurface.withValues(alpha: 0.54), fontSize: 10)),
                     const SizedBox(width: 16),
                     Container(
                         width: 16, height: 1,
-                        color: Colors.white30,
+                        color: onSurface.withValues(alpha: 0.3),
                         margin: const EdgeInsets.only(right: 5)),
-                    const Text('Einzahlungen',
+                    Text('Einzahlungen',
                         style: TextStyle(
-                            color: Colors.white54, fontSize: 10)),
+                            color: onSurface.withValues(alpha: 0.54), fontSize: 10)),
                   ],
                 ),
               ],
@@ -283,26 +286,20 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.darkPrimary.withValues(alpha: 0.15),
-                  AppColors.darkPrimary.withValues(alpha: 0.05),
-                ],
-              ),
+              color: primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: AppColors.darkPrimary.withValues(alpha: 0.3)),
+              border: Border.all(color: primary.withValues(alpha: 0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Endkapital',
-                    style: TextStyle(color: Colors.white54, fontSize: 12)),
+                Text('Endkapital',
+                    style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
                 const SizedBox(height: 6),
                 Text(
                   CurrencyFormatter.format(endKapital),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: onSurface,
                     fontSize: 32,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -1,
@@ -311,28 +308,28 @@ class _SparrechnerScreenState extends State<SparrechnerScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'nach $_laufzeit ${_laufzeit == 1 ? 'Jahr' : 'Jahren'}',
-                  style: const TextStyle(
-                      color: Colors.white38, fontSize: 12),
+                  style: TextStyle(
+                      color: AppColors.textSecondary(context), fontSize: 12),
                 ),
                 const SizedBox(height: 16),
-                const Divider(color: Colors.white10),
+                Divider(color: outline.withValues(alpha: 0.2)),
                 const SizedBox(height: 12),
                 ToolResultRow(
                   label: 'Gesamt-Einzahlungen',
                   value: CurrencyFormatter.format(totalContributions),
-                  color: Colors.white54,
+                  color: AppColors.textSecondary(context),
                 ),
                 const SizedBox(height: 8),
                 ToolResultRow(
                   label: 'Zinserträge / Gewinne',
                   value: '+${CurrencyFormatter.format(zinsertraege)}',
-                  color: AppColors.darkPositive,
+                  color: AppColors.positive(context),
                 ),
                 const SizedBox(height: 8),
                 ToolResultRow(
                   label: 'Gesamtrendite',
                   value: '+${rendite.toStringAsFixed(1)}%',
-                  color: AppColors.darkPositive,
+                  color: AppColors.positive(context),
                 ),
               ],
             ),

@@ -144,7 +144,7 @@ class _CryptoSearchSheetState extends State<_CryptoSearchSheet> {
                   formatted,
                   style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: AppColors.darkPositive,
+                        color: AppColors.positive(ctx),
                       ),
                 )
               : null,
@@ -357,7 +357,7 @@ class _EtfSearchSheetState extends State<_EtfSearchSheet> {
               '${p.toStringAsFixed(2)}€',
               style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.darkPositive,
+                    color: AppColors.positive(ctx),
                   ),
             );
           }
@@ -425,7 +425,7 @@ class _LivePriceState extends State<_LivePrice> {
       '${_price!.toStringAsFixed(2)}€',
       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w600,
-            color: AppColors.darkPositive,
+            color: AppColors.positive(context),
           ),
     );
   }

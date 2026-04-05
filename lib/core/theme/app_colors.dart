@@ -16,16 +16,16 @@ class AppColors {
   static const darkBorder = Color(0xFF2A3142);
 
   // --- Light Mode ---
-  static const lightBackground = Color(0xFFF4F6FA);
+  static const lightBackground = Color(0xFFF0F4FF);
   static const lightSurface = Color(0xFFFFFFFF);
-  static const lightSurfaceVariant = Color(0xFFEEF1F7);
+  static const lightSurfaceVariant = Color(0xFFE8EEFF);
   static const lightPrimary = Color(0xFF5B52E8);
   static const lightSecondary = Color(0xFFE5534B);
-  static const lightPositive = Color(0xFF3A9A6B);
-  static const lightWarning = Color(0xFFE8930A);
+  static const lightPositive = Color(0xFF2E8B57);
+  static const lightWarning = Color(0xFFD4790A);
   static const lightText = Color(0xFF0D0F14);
-  static const lightTextSecondary = Color(0xFF6B7280);
-  static const lightBorder = Color(0xFFDDE1EB);
+  static const lightTextSecondary = Color(0xFF5A6070);
+  static const lightBorder = Color(0xFFD0D5E8);
 
   // --- Category Gradients ---
   static const gradientGiro = [Color(0xFF5265BB), Color(0xFF5E3C82)];
@@ -34,4 +34,32 @@ class AppColors {
   static const gradientCrypto = [Color(0xFFC85A7B), Color(0xFFCBB433)];
   static const gradientPhysical = [Color(0xFF36BA62), Color(0xFF2DC7AC)];
   static const gradientSchulden = [Color(0xFFCC5656), Color(0xFFBE0761)];
+
+  // --- Theme-aware helpers ---
+  static bool _isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+
+  static Color positive(BuildContext context) =>
+      _isDark(context) ? darkPositive : lightPositive;
+
+  static Color warning(BuildContext context) =>
+      _isDark(context) ? darkWarning : lightWarning;
+
+  static Color textSecondary(BuildContext context) =>
+      _isDark(context) ? darkTextSecondary : lightTextSecondary;
+
+  static Color surface(BuildContext context) =>
+      _isDark(context) ? darkSurface : lightSurface;
+
+  static Color surfaceVariant(BuildContext context) =>
+      _isDark(context) ? darkSurfaceVariant : lightSurfaceVariant;
+
+  static Color border(BuildContext context) =>
+      _isDark(context) ? darkBorder : lightBorder;
+
+  static Color primary(BuildContext context) =>
+      _isDark(context) ? darkPrimary : lightPrimary;
+
+  static Color secondary(BuildContext context) =>
+      _isDark(context) ? darkSecondary : lightSecondary;
 }

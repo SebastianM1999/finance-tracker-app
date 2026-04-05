@@ -51,10 +51,12 @@ class _ZinsrechnerScreenState extends State<ZinsrechnerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0F14),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: ListView(
         controller: widget.scrollController,
@@ -64,19 +66,19 @@ class _ZinsrechnerScreenState extends State<ZinsrechnerScreen> {
             child: Container(
               width: 36, height: 4,
               decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: theme.colorScheme.outline.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2)),
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Zinsrechner',
+          Text('Zinsrechner',
               style: TextStyle(
-                  color: Colors.white,
+                  color: onSurface,
                   fontSize: 20,
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          const Text('Zinseszins-Berechnung',
-              style: TextStyle(color: Colors.white38, fontSize: 13)),
+          Text('Zinseszins-Berechnung',
+              style: TextStyle(color: AppColors.textSecondary(context), fontSize: 13)),
           const SizedBox(height: 24),
 
           ToolInputField(
@@ -101,8 +103,8 @@ class _ZinsrechnerScreenState extends State<ZinsrechnerScreen> {
           ),
           const SizedBox(height: 14),
 
-          const Text('Zinsintervall',
-              style: TextStyle(color: Colors.white60, fontSize: 13)),
+          Text('Zinsintervall',
+              style: TextStyle(color: AppColors.textSecondary(context), fontSize: 13)),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -127,26 +129,20 @@ class _ZinsrechnerScreenState extends State<ZinsrechnerScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.darkPrimary.withValues(alpha: 0.15),
-                  AppColors.darkPrimary.withValues(alpha: 0.05),
-                ],
-              ),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: AppColors.darkPrimary.withValues(alpha: 0.3)),
+              border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Ergebnis',
-                    style: TextStyle(color: Colors.white54, fontSize: 12)),
+                Text('Ergebnis',
+                    style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12)),
                 const SizedBox(height: 8),
                 Text(
                   CurrencyFormatter.format(_endkapital),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: onSurface,
                     fontSize: 32,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -1,
@@ -155,21 +151,21 @@ class _ZinsrechnerScreenState extends State<ZinsrechnerScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'Endkapital nach $_laufzeit ${_laufzeit == 1 ? 'Jahr' : 'Jahren'}',
-                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12),
                 ),
                 const SizedBox(height: 16),
-                const Divider(color: Colors.white10),
+                const Divider(),
                 const SizedBox(height: 12),
                 ToolResultRow(
                   label: 'Einzahlung',
                   value: CurrencyFormatter.format(_anfang),
-                  color: Colors.white54,
+                  color: AppColors.textSecondary(context),
                 ),
                 const SizedBox(height: 8),
                 ToolResultRow(
                   label: 'Zinserträge',
                   value: '+${CurrencyFormatter.format(_zinsen)}',
-                  color: AppColors.darkPositive,
+                  color: AppColors.positive(context),
                 ),
               ],
             ),

@@ -23,7 +23,7 @@ Future<void> showProfileSidebar(BuildContext context) => showGeneralDialog(
       context: context,
       barrierDismissible: true,
       barrierLabel: '',
-      barrierColor: Colors.black54,
+      barrierColor: Theme.of(context).brightness == Brightness.dark ? Colors.black54 : Colors.black12,
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (ctx, anim, _) => const _ProfileSidebarPage(),
       transitionBuilder: (ctx, anim, _, child) {
@@ -62,6 +62,9 @@ class _ProfileSidebarPage extends ConsumerWidget {
         .toSet()
         .length;
 
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    final outline = theme.colorScheme.outline;
     return Align(
       alignment: Alignment.centerLeft,
       child: Material(
@@ -69,7 +72,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
         child: Container(
           width: MediaQuery.of(context).size.width * 0.82,
           height: double.infinity,
-          color: const Color(0xFF0D0F14),
+          color: theme.colorScheme.surface,
           child: SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,7 +81,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
                 Align(
                   alignment: Alignment.topRight,
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white54),
+                    icon: Icon(Icons.close, color: onSurface.withValues(alpha: 0.54)),
                     onPressed: () => Navigator.of(context).pop(),
                     padding: const EdgeInsets.all(8),
                     constraints: const BoxConstraints(),
@@ -104,11 +107,11 @@ class _ProfileSidebarPage extends ConsumerWidget {
                               )
                             : CircleAvatar(
                                 radius: 26,
-                                backgroundColor: AppColors.darkPrimary,
+                                backgroundColor: theme.colorScheme.primary,
                                 child: Text(
                                   initial,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onPrimary,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 20,
                                   ),
@@ -119,10 +122,10 @@ class _ProfileSidebarPage extends ConsumerWidget {
                       Expanded(
                         child: Text(
                           displayName.split(' ').first,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            color: onSurface,
                           ),
                         ),
                       ),
@@ -130,7 +133,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
                   ),
                 ),
 
-                const Divider(color: Colors.white10, height: 1),
+                Divider(color: outline.withValues(alpha: 0.35), height: 1),
 
                 // Scrollable menu area
                 Expanded(
@@ -163,7 +166,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
                   },
                 ),
 
-                const Divider(color: Colors.white10, height: 1),
+                Divider(color: outline.withValues(alpha: 0.35), height: 1),
 
                 // Group: Finance stats
                 const _SectionHeader(label: 'Statistiken'),
@@ -196,7 +199,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
                   },
                 ),
 
-                const Divider(color: Colors.white10, height: 1),
+                Divider(color: outline.withValues(alpha: 0.35), height: 1),
 
                 // Group: Tools
                 const _SectionHeader(label: 'Werkzeuge'),
@@ -241,7 +244,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
                   },
                 ),
 
-                const Divider(color: Colors.white10, height: 1),
+                Divider(color: outline.withValues(alpha: 0.35), height: 1),
 
                 // Group: Markt
                 const _SectionHeader(label: 'Markt'),
@@ -290,7 +293,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
                   ),
                 ),
 
-                const Divider(color: Colors.white10, height: 1),
+                Divider(color: outline.withValues(alpha: 0.35), height: 1),
 
                 _MenuItem(
                   icon: Icons.settings_outlined,
@@ -302,7 +305,7 @@ class _ProfileSidebarPage extends ConsumerWidget {
                   },
                 ),
 
-                const Divider(color: Colors.white10, height: 1),
+                Divider(color: outline.withValues(alpha: 0.35), height: 1),
 
                 // Sign out
                 ListTile(
@@ -346,7 +349,7 @@ class _SectionHeader extends StatelessWidget {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: Colors.white.withOpacity(0.3),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
           letterSpacing: 1.2,
         ),
       ),
@@ -371,16 +374,17 @@ class _MenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
-      leading: Icon(icon, color: Colors.white70, size: 22),
+      leading: Icon(icon, color: onSurface.withValues(alpha: 0.7), size: 22),
       title: Row(
         children: [
           Flexible(
             child: Text(
               title,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: onSurface,
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
@@ -415,13 +419,13 @@ class _MenuItem extends StatelessWidget {
               trailing!,
               style: TextStyle(
                 fontSize: 13,
-                color: Colors.white.withOpacity(0.4),
+                color: onSurface.withValues(alpha: 0.4),
               ),
             ),
           const SizedBox(width: 4),
           Icon(
             Icons.chevron_right,
-            color: Colors.white.withOpacity(0.2),
+            color: onSurface.withValues(alpha: 0.25),
             size: 18,
           ),
         ],

@@ -133,8 +133,15 @@ class AppTheme {
           ),
         ),
         snackBarTheme: const SnackBarThemeData(
+          backgroundColor: AppColors.lightSurfaceVariant,
           contentTextStyle: TextStyle(color: AppColors.lightText),
           behavior: SnackBarBehavior.floating,
+        ),
+        segmentedButtonTheme: SegmentedButtonThemeData(
+          style: SegmentedButton.styleFrom(
+            selectedBackgroundColor: AppColors.lightPrimary,
+            selectedForegroundColor: Colors.white,
+          ),
         ),
       );
 

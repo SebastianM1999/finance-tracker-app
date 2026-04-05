@@ -12,30 +12,75 @@ class BadgeGridScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(gamificationProfileProvider);
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    final outline = theme.colorScheme.outline;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0D0F14),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0D0F14),
-        title: const Text(
-          'Meine Badges',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        elevation: 0,
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      body: profileAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Fehler: $e')),
-        data: (profile) {
-          final unlockedIds = profile?.unlockedBadgeIds.toSet() ?? {};
-          final badgeUnlockedAt = profile?.badgeUnlockedAt ?? {};
-          return _MissionGrid(
-              unlockedIds: unlockedIds, badgeUnlockedAt: badgeUnlockedAt);
-        },
+      child: Column(
+        children: [
+          // ── Drag handle + title ──────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+            child: Column(
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: outline.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Meine Badges',
+                        style: TextStyle(
+                          color: onSurface,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Errungenschaften & Fortschritt',
+                        style: TextStyle(
+                          color: onSurface.withValues(alpha: 0.4),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          // ── Content ─────────────────────────────────────────────────────
+          Expanded(
+            child: profileAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Fehler: $e')),
+              data: (profile) {
+                final unlockedIds = profile?.unlockedBadgeIds.toSet() ?? {};
+                final badgeUnlockedAt = profile?.badgeUnlockedAt ?? {};
+                return _MissionGrid(
+                    unlockedIds: unlockedIds, badgeUnlockedAt: badgeUnlockedAt);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -112,9 +157,10 @@ class _CategoryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isComplete = unlockedMissions == totalMissions;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final progressColor = isComplete
         ? const Color(0xFFFFD700)
-        : Colors.white.withOpacity(0.15);
+        : onSurface.withOpacity(0.15);
 
     return Padding(
       padding: const EdgeInsets.only(top: 20, bottom: 12),
@@ -126,10 +172,10 @@ class _CategoryHeader extends StatelessWidget {
             children: [
               Text(
                 category.label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: onSurface,
                   letterSpacing: -0.3,
                 ),
               ),
@@ -140,12 +186,12 @@ class _CategoryHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isComplete
                       ? const Color(0xFFFFD700).withOpacity(0.12)
-                      : Colors.white.withOpacity(0.06),
+                      : onSurface.withOpacity(0.06),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isComplete
                         ? const Color(0xFFFFD700).withOpacity(0.3)
-                        : Colors.white12,
+                        : onSurface.withOpacity(0.12),
                     width: 1,
                   ),
                 ),
@@ -156,7 +202,7 @@ class _CategoryHeader extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                     color: isComplete
                         ? const Color(0xFFFFD700)
-                        : Colors.white.withOpacity(0.45),
+                        : onSurface.withOpacity(0.45),
                   ),
                 ),
               ),
@@ -168,7 +214,7 @@ class _CategoryHeader extends StatelessWidget {
             borderRadius: BorderRadius.circular(2),
             child: LinearProgressIndicator(
               value: totalMissions == 0 ? 0 : unlockedMissions / totalMissions,
-              backgroundColor: Colors.white.withOpacity(0.06),
+              backgroundColor: onSurface.withOpacity(0.06),
               valueColor: AlwaysStoppedAnimation<Color>(progressColor),
               minHeight: 2,
             ),

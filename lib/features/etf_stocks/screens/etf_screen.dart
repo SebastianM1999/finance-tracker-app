@@ -259,7 +259,7 @@ class _EtfCard extends ConsumerWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: AppColors.darkSecondary,
+          color: Theme.of(context).colorScheme.error,
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white),
@@ -319,7 +319,7 @@ class _EtfCard extends ConsumerWidget {
                           CurrencyFormatter.format(position.currentValue),
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.darkPositive,
+                            color: AppColors.positive(context),
                           ),
                         ),
                       ),
@@ -331,8 +331,8 @@ class _EtfCard extends ConsumerWidget {
                             pnlPos ? Icons.arrow_upward : Icons.arrow_downward,
                             size: 12,
                             color: pnlPos
-                                ? AppColors.darkPositive
-                                : AppColors.darkSecondary,
+                                ? AppColors.positive(context)
+                                : AppColors.secondary(context),
                           ),
                           const SizedBox(width: 2),
                           Flexible(
@@ -340,8 +340,8 @@ class _EtfCard extends ConsumerWidget {
                               '${CurrencyFormatter.formatPnl(position.pnlAbsolute)} (${position.pnlPercent.toStringAsFixed(1)}%)',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: pnlPos
-                                    ? AppColors.darkPositive
-                                    : AppColors.darkSecondary,
+                                    ? AppColors.positive(context)
+                                    : AppColors.secondary(context),
                                 fontWeight: FontWeight.w600,
                               ),
                               overflow: TextOverflow.ellipsis,

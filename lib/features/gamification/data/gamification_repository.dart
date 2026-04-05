@@ -55,8 +55,10 @@ class GamificationRepository {
     });
   }
 
-  Future<void> incrementUpdateCount() =>
-      _profileDoc.update({'updateCount': FieldValue.increment(1)});
+  Future<void> incrementUpdateCount() => _profileDoc.update({
+        'updateCount': FieldValue.increment(1),
+        'lastUpdateCountedAt': Timestamp.fromDate(DateTime.now()),
+      });
 
   Future<void> incrementPaidOffDebts() =>
       _profileDoc.update({'paidOffDebts': FieldValue.increment(1)});

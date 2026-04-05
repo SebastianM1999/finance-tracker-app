@@ -136,21 +136,29 @@ class _NetWorthHero extends ConsumerWidget {
     final netWorth = ref.watch(netWorthProvider);
     final change = ref.watch(netWorthChangeProvider);
     final isPositive = change.absolute >= 0;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final positiveColor = AppColors.positive(context);
+    final negativeColor = AppColors.secondary(context);
+
+    final gradientColors = isDark
+        ? [const Color(0xFF1E2530), const Color(0xFF161B22)]
+        : [const Color(0xFF5B52E8), const Color(0xFF7C3AED)];
+    final textOnCard = Colors.white;
+    final subtextOnCard = Colors.white.withValues(alpha: 0.7);
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1E2530), Color(0xFF161B22)],
+        gradient: LinearGradient(
+          colors: gradientColors,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: AppColors.darkBorder),
         boxShadow: [
           BoxShadow(
-            color: AppColors.darkPrimary.withValues(alpha: 0.15),
+            color: AppColors.primary(context).withValues(alpha: isDark ? 0.15 : 0.35),
             blurRadius: 32,
             offset: const Offset(0, 8),
           ),
@@ -159,9 +167,9 @@ class _NetWorthHero extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Gesamtvermögen',
-            style: TextStyle(color: AppColors.darkTextSecondary, fontSize: 14),
+            style: TextStyle(color: subtextOnCard, fontSize: 14),
           ),
           const SizedBox(height: 8),
           Row(
@@ -172,8 +180,8 @@ class _NetWorthHero extends ConsumerWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     CurrencyFormatter.format(netWorth),
-                    style: const TextStyle(
-                      color: AppColors.darkText,
+                    style: TextStyle(
+                      color: textOnCard,
                       fontSize: 36,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -1,
@@ -191,18 +199,15 @@ class _NetWorthHero extends ConsumerWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: (isPositive
-                            ? AppColors.darkPositive
-                            : AppColors.darkSecondary)
-                        .withValues(alpha: 0.15),
+                    color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     '${CurrencyFormatter.formatPnl(change.absolute)}  ${CurrencyFormatter.formatPercent(change.percent)}',
                     style: TextStyle(
                       color: isPositive
-                          ? AppColors.darkPositive
-                          : AppColors.darkSecondary,
+                          ? (isDark ? positiveColor : const Color(0xFF86EFAC))
+                          : (isDark ? negativeColor : const Color(0xFFFCA5A5)),
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
@@ -212,10 +217,9 @@ class _NetWorthHero extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'seit gestern',
-                style:
-                    TextStyle(color: AppColors.darkTextSecondary, fontSize: 12),
+                style: TextStyle(color: subtextOnCard, fontSize: 12),
               ),
             ],
           ),
@@ -403,19 +407,23 @@ class _WelcomeBanner extends ConsumerWidget {
     final netWorth = ref.watch(netWorthProvider);
     if (netWorth != 0) return const SizedBox.shrink();
 
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 16),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1E2530), Color(0xFF161B22)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
-          border:
-              Border.all(color: AppColors.darkPrimary.withValues(alpha: 0.4)),
+          border: Border.all(color: primary.withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: primary.withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -425,32 +433,25 @@ class _WelcomeBanner extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppColors.darkPrimary.withValues(alpha: 0.2),
+                    color: primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.waving_hand_outlined,
-                      color: AppColors.darkPrimary, size: 18),
+                  child: Icon(Icons.waving_hand_outlined,
+                      color: primary, size: 18),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Willkommen bei FinTrack!',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: theme.textTheme.titleMedium,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Füge deine ersten Positionen hinzu, um dein Gesamtvermögen zu tracken.',
-              style: TextStyle(
-                color: AppColors.darkTextSecondary,
-                fontSize: 13,
-              ),
+              style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
             Row(
@@ -491,26 +492,26 @@ class _OnboardingButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          color: AppColors.darkPrimary.withValues(alpha: 0.15),
+          color: primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
-          border:
-              Border.all(color: AppColors.darkPrimary.withValues(alpha: 0.3)),
+          border: Border.all(color: primary.withValues(alpha: 0.25)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 14, color: AppColors.darkPrimary),
+            Icon(icon, size: 14, color: primary),
             const SizedBox(width: 6),
             Flexible(
               child: Text(
                 label,
-                style: const TextStyle(
-                  color: AppColors.darkPrimary,
+                style: TextStyle(
+                  color: primary,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
@@ -579,50 +580,57 @@ class _UpcomingMaturityBannerState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Tappable section header
-          GestureDetector(
-            onTap: _toggle,
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              children: [
-                const Text(
-                  'Fälligkeiten',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.darkWarning.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${upcoming.length}',
-                    style: const TextStyle(
-                      color: AppColors.darkWarning,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+          Builder(
+            builder: (context) {
+              final warningColor = AppColors.warning(context);
+              final textSecondary = AppColors.textSecondary(context);
+              final onSurface = Theme.of(context).colorScheme.onSurface;
+              return GestureDetector(
+                onTap: _toggle,
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  children: [
+                    Text(
+                      'Fälligkeiten',
+                      style: TextStyle(
+                        color: onSurface,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: warningColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${upcoming.length}',
+                        style: TextStyle(
+                          color: warningColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    RotationTransition(
+                      turns: Tween(begin: 0.5, end: 0.0).animate(CurvedAnimation(
+                        parent: _chevronController,
+                        curve: Curves.easeInOut,
+                      )),
+                      child: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: textSecondary,
+                        size: 20,
+                      ),
+                    ),
+                  ],
                 ),
-                const Spacer(),
-                RotationTransition(
-                  turns: Tween(begin: 0.5, end: 0.0).animate(CurvedAnimation(
-                    parent: _chevronController,
-                    curve: Curves.easeInOut,
-                  )),
-                  child: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.darkTextSecondary,
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           ),
           // Animated card list
           AnimatedSize(
@@ -662,18 +670,20 @@ class _MaturityCard extends ConsumerWidget {
 
 
   /// Mirrors _FestgeldCard._urgencyColor — null means "not urgent yet"
-  Color? _urgencyColor(bool isExpired, double progress) {
-    if (isExpired) return AppColors.darkSecondary;
+  Color? _urgencyColor(BuildContext context, bool isExpired, double progress) {
+    if (isExpired) return AppColors.secondary(context);
     if (progress >= 0.90) return const Color(0xFF4FC770);
-    if (progress >= 0.75) return AppColors.darkPositive;
+    if (progress >= 0.75) return AppColors.positive(context);
     return null;
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     final isExpired = item.daysRemaining < 0;
-    final urgency = _urgencyColor(isExpired, item.progress);
-    final borderColor = urgency ?? AppColors.darkPrimary;
+    final urgency = _urgencyColor(context, isExpired, item.progress);
+    final borderColor = urgency ?? theme.colorScheme.primary;
+    final textSecondary = AppColors.textSecondary(context);
     final daysLabel = DateFormatter.daysRemaining(item.endDate);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -685,7 +695,7 @@ class _MaturityCard extends ConsumerWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.darkSurface,
+            color: theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: borderColor.withValues(alpha: 0.35)),
             boxShadow: [
@@ -698,7 +708,6 @@ class _MaturityCard extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              // Gradient pig icon — identical to Festgeld tab card
               Container(
                 width: 36,
                 height: 36,
@@ -714,16 +723,13 @@ class _MaturityCard extends ConsumerWidget {
                     color: Colors.white, size: 18),
               ),
               const SizedBox(width: 12),
-              // Bank name + amounts
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       item.bankName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
+                      style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -732,19 +738,14 @@ class _MaturityCard extends ConsumerWidget {
                       children: [
                         Text(
                           CurrencyFormatter.format(item.amount),
-                          style: const TextStyle(
-                            color: AppColors.darkTextSecondary,
-                            fontSize: 12,
-                          ),
+                          style: TextStyle(color: textSecondary, fontSize: 12),
                         ),
-                        const Text(' → ',
-                            style: TextStyle(
-                                color: AppColors.darkTextSecondary,
-                                fontSize: 12)),
+                        Text(' → ',
+                            style: TextStyle(color: textSecondary, fontSize: 12)),
                         Text(
                           CurrencyFormatter.format(item.projectedPayout),
-                          style: const TextStyle(
-                            color: AppColors.darkPositive,
+                          style: TextStyle(
+                            color: AppColors.positive(context),
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
@@ -755,7 +756,6 @@ class _MaturityCard extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // Status badge — colored when urgent, plain text otherwise
               if (urgency != null)
                 Container(
                   padding:
@@ -776,8 +776,8 @@ class _MaturityCard extends ConsumerWidget {
               else
                 Text(
                   daysLabel,
-                  style: const TextStyle(
-                    color: AppColors.darkTextSecondary,
+                  style: TextStyle(
+                    color: textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),

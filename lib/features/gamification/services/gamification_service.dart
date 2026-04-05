@@ -17,9 +17,13 @@ class GamificationService {
   // ── Public event handlers ────────────────────────────────────────────────
 
   /// Called when the user refreshes the home screen or edits/adds a position.
+  /// updateCount only increments once per 12 hours to prevent spam.
   Future<GamificationResult> onRefresh({required BadgeContext ctx}) async {
     final profile = await _repo.ensureProfile();
-    await _repo.incrementUpdateCount();
+    final last = profile.lastUpdateCountedAt;
+    final cooldownPassed = last == null ||
+        DateTime.now().difference(last) >= const Duration(hours: 12);
+    if (cooldownPassed) await _repo.incrementUpdateCount();
     return _applyBadges(profile: profile, ctx: ctx);
   }
 

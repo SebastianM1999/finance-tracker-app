@@ -31,14 +31,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0D0F14), Color(0xFF1A1040), Color(0xFF0D0F14)],
-            stops: [0.0, 0.5, 1.0],
+            colors: isDark
+                ? [const Color(0xFF0D0F14), const Color(0xFF1A1040), const Color(0xFF0D0F14)]
+                : [const Color(0xFFF0F4FF), const Color(0xFFE8EEFF), const Color(0xFFF0F4FF)],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
@@ -65,6 +68,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 class _Logo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Column(
       children: [
         Container(
@@ -72,7 +77,7 @@ class _Logo extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: AppColors.darkPrimary.withValues(alpha: 0.5),
+                color: primary.withValues(alpha: 0.4),
                 blurRadius: 32,
                 offset: const Offset(0, 8),
               ),
@@ -88,10 +93,10 @@ class _Logo extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        const Text(
+        Text(
           'FinTrack',
           style: TextStyle(
-            color: Colors.white,
+            color: onSurface,
             fontSize: 36,
             fontWeight: FontWeight.w800,
             letterSpacing: -1,
@@ -105,11 +110,11 @@ class _Logo extends StatelessWidget {
 class _Tagline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const Text(
+    return Text(
       'Dein Vermögen. Auf einen Blick.',
       textAlign: TextAlign.center,
       style: TextStyle(
-        color: AppColors.darkTextSecondary,
+        color: AppColors.textSecondary(context),
         fontSize: 16,
         fontWeight: FontWeight.w400,
         letterSpacing: 0.2,

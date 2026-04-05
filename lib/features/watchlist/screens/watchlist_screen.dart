@@ -106,9 +106,9 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
     );
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0F14),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
@@ -129,10 +129,7 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
             child: stream.when(
               loading: () =>
                   const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                child: Text('Fehler: $e',
-                    style: const TextStyle(color: Colors.white54)),
-              ),
+              error: (e, _) => Center(child: Text('Fehler: $e')),
               data: (items) {
                 if (items.isEmpty) return const _EmptyState();
                 return RefreshIndicator(
@@ -188,11 +185,13 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-        decoration: const BoxDecoration(
-          color: Color(0xFF161820),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Column(
+        child: Builder(builder: (context) {
+          final theme = Theme.of(context);
+          return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
@@ -214,18 +213,14 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Kursziel-Benachrichtigungen',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700),
+              style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 10),
             Text(
               'Lass dich automatisch benachrichtigen, wenn ein Asset dein Kursziel erreicht — auch wenn die App geschlossen ist.\n\nDiese Funktion ist Teil von FinTrack Pro. Bald verfügbar!',
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5), fontSize: 14),
+              style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -234,7 +229,7 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
               child: ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.darkPrimary,
+                  backgroundColor: theme.colorScheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
@@ -244,7 +239,7 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
               ),
             ),
           ],
-        ),
+        );}),
       ),
     );
   }
@@ -303,7 +298,7 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
                   prefixStyle:
                       const TextStyle(color: Colors.white54, fontSize: 18),
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -344,7 +339,7 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.darkPrimary,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
@@ -371,6 +366,8 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final outline = Theme.of(context).colorScheme.outline;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 12, 0),
       child: Column(
@@ -381,7 +378,7 @@ class _Header extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white24,
+                color: outline.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -394,10 +391,10 @@ class _Header extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Text(
+                      Text(
                         'Watchlist',
                         style: TextStyle(
-                            color: Colors.white,
+                            color: onSurface,
                             fontSize: 20,
                             fontWeight: FontWeight.w700),
                       ),
@@ -424,16 +421,17 @@ class _Header extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const Text(
+                  Text(
                     'Kursziele & Push-Benachrichtigungen',
-                    style: TextStyle(color: Colors.white38, fontSize: 13),
+                    style: TextStyle(
+                        color: onSurface.withValues(alpha: 0.4), fontSize: 13),
                   ),
                 ],
               ),
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.add_circle_outline,
-                    color: Colors.white70, size: 26),
+                icon: Icon(Icons.add_circle_outline,
+                    color: onSurface.withValues(alpha: 0.7), size: 26),
                 onPressed: onAdd,
                 tooltip: 'Asset hinzufügen',
               ),
@@ -463,14 +461,14 @@ class _WatchlistTile extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onSetTarget;
 
-  Color get _typeColor {
+  Color _typeColor(BuildContext context) {
     switch (item.type) {
       case 'etf':
         return const Color(0xFF3F8ACB);
       case 'crypto':
         return const Color(0xFFC85A7B);
       default:
-        return AppColors.darkPositive;
+        return AppColors.positive(context);
     }
   }
 
@@ -519,12 +517,12 @@ class _WatchlistTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.04),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: reached
-                  ? AppColors.darkPositive.withOpacity(0.4)
-                  : Colors.white.withValues(alpha: 0.07),
+                  ? AppColors.positive(context).withValues(alpha: 0.4)
+                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.25),
             ),
           ),
           child: Row(
@@ -534,9 +532,9 @@ class _WatchlistTile extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: _typeColor.withOpacity(0.1),
+                  color: _typeColor(context).withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _typeColor.withOpacity(0.3)),
+                  border: Border.all(color: _typeColor(context).withValues(alpha:0.3)),
                 ),
                 child: Center(
                   child: FittedBox(
@@ -548,7 +546,7 @@ class _WatchlistTile extends StatelessWidget {
                             ? item.symbol.split('.').first.substring(0, 4)
                             : item.symbol.split('.').first,
                         style: TextStyle(
-                          color: _typeColor,
+                          color: _typeColor(context),
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
@@ -566,8 +564,8 @@ class _WatchlistTile extends StatelessWidget {
                   children: [
                     Text(
                       item.name,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -580,13 +578,13 @@ class _WatchlistTile extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: _typeColor.withOpacity(0.12),
+                            color: _typeColor(context).withValues(alpha:0.12),
                             borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
                             _typeLabel,
                             style: TextStyle(
-                              color: _typeColor,
+                              color: _typeColor(context),
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                             ),
@@ -598,8 +596,8 @@ class _WatchlistTile extends StatelessWidget {
                             reached ? Icons.notifications_active : Icons.notifications_none,
                             size: 13,
                             color: reached
-                                ? AppColors.darkPositive
-                                : Colors.white38,
+                                ? AppColors.positive(context)
+                                : AppColors.textSecondary(context),
                           ),
                           const SizedBox(width: 3),
                           Text(
@@ -607,8 +605,8 @@ class _WatchlistTile extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 11,
                               color: reached
-                                  ? AppColors.darkPositive
-                                  : Colors.white38,
+                                  ? AppColors.positive(context)
+                                  : AppColors.textSecondary(context),
                             ),
                           ),
                         ],
@@ -634,8 +632,8 @@ class _WatchlistTile extends StatelessWidget {
                   else if (currentPrice != null)
                     Text(
                       _formatPrice(currentPrice!),
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
@@ -644,7 +642,7 @@ class _WatchlistTile extends StatelessWidget {
                     Text(
                       '—',
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.25), fontSize: 14),
+                          color: AppColors.textSecondary(context), fontSize: 14),
                     ),
                   if (distancePct != null && !reached) ...[
                     const SizedBox(height: 3),
@@ -653,8 +651,8 @@ class _WatchlistTile extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 10,
                         color: distancePct >= 0
-                            ? AppColors.darkPositive
-                            : Colors.white38,
+                            ? AppColors.positive(context)
+                            : AppColors.textSecondary(context),
                       ),
                     ),
                   ],
@@ -664,7 +662,7 @@ class _WatchlistTile extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.darkPositive.withOpacity(0.15),
+                        color: AppColors.positive(context).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(5),
                       ),
                       child: Text(
@@ -672,7 +670,7 @@ class _WatchlistTile extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.darkPositive,
+                          color: AppColors.positive(context),
                         ),
                       ),
                     ),
@@ -885,11 +883,16 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         height: MediaQuery.of(context).size.height * 0.85,
-        decoration: const BoxDecoration(
-          color: Color(0xFF0D0F14),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Column(
+        child: Builder(builder: (context) {
+          final theme = Theme.of(context);
+          final onSurface = theme.colorScheme.onSurface;
+          final primary = theme.colorScheme.primary;
+          final outline = theme.colorScheme.outline;
+          return Column(
           children: [
             // Drag handle
             const SizedBox(height: 12),
@@ -898,7 +901,7 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: outline.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -908,17 +911,17 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  const Text(
+                  Text(
                     'Asset hinzufügen',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: onSurface,
                         fontSize: 18,
                         fontWeight: FontWeight.w700),
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Colors.white54, size: 20),
+                    icon: Icon(Icons.close,
+                        color: onSurface.withValues(alpha: 0.5), size: 20),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -929,11 +932,11 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: TabBar(
                 controller: _tabs,
-                labelColor: AppColors.darkPrimary,
-                unselectedLabelColor: Colors.white38,
-                indicatorColor: AppColors.darkPrimary,
+                labelColor: primary,
+                unselectedLabelColor: onSurface.withValues(alpha: 0.4),
+                indicatorColor: primary,
                 indicatorSize: TabBarIndicatorSize.label,
-                dividerColor: Colors.white10,
+                dividerColor: outline.withValues(alpha: 0.2),
                 tabs: const [
                   Tab(text: 'Aktie / ETF'),
                   Tab(text: 'Krypto'),
@@ -947,16 +950,15 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
               child: TextField(
                 controller: _searchCtrl,
                 onChanged: _onSearch,
-                style:
-                    const TextStyle(color: Colors.white, fontSize: 15),
+                style: TextStyle(color: onSurface, fontSize: 15),
                 decoration: InputDecoration(
                   hintText: _tabs.index == 0
                       ? 'Suche nach Aktie oder ETF…'
                       : 'Suche nach Kryptowährung…',
                   hintStyle: TextStyle(
-                      color: Colors.white.withOpacity(0.25), fontSize: 15),
-                  prefixIcon: const Icon(Icons.search,
-                      color: Colors.white38, size: 20),
+                      color: onSurface.withValues(alpha: 0.3), fontSize: 15),
+                  prefixIcon: Icon(Icons.search,
+                      color: onSurface.withValues(alpha: 0.4), size: 20),
                   suffixIcon: _searching
                       ? const Padding(
                           padding: EdgeInsets.all(12),
@@ -969,7 +971,7 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
                         )
                       : null,
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -1004,7 +1006,7 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
             ),
             // Target + confirm
             if (_selectedSymbol != null) ...[
-              const Divider(color: Colors.white10, height: 1),
+              const Divider(height: 1),
               Padding(
                 padding:
                     const EdgeInsets.fromLTRB(20, 16, 20, 20),
@@ -1013,14 +1015,14 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.check_circle_outline,
-                            color: AppColors.darkPositive, size: 18),
+                        Icon(Icons.check_circle_outline,
+                            color: AppColors.positive(context), size: 18),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             '$_selectedSymbol — $_selectedName',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1047,18 +1049,18 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
                               FilteringTextInputFormatter.allow(
                                   RegExp(r'[\d.,]')),
                             ],
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 15),
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface, fontSize: 15),
                             decoration: InputDecoration(
                               hintText: 'Zielkurs optional',
                               hintStyle: TextStyle(
-                                  color: Colors.white.withOpacity(0.25),
+                                  color: AppColors.textSecondary(context),
                                   fontSize: 15),
                               prefixText: '€  ',
-                              prefixStyle: const TextStyle(
-                                  color: Colors.white54, fontSize: 15),
+                              prefixStyle: TextStyle(
+                                  color: AppColors.textSecondary(context), fontSize: 15),
                               filled: true,
-                              fillColor: Colors.white.withOpacity(0.05),
+                              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -1073,7 +1075,7 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
                         ElevatedButton(
                           onPressed: _confirm,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.darkPrimary,
+                            backgroundColor: Theme.of(context).colorScheme.primary,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
@@ -1089,7 +1091,8 @@ class _AddWatchlistSheetState extends State<_AddWatchlistSheet>
               ),
             ],
           ],
-        ),
+        );
+        }),
       ),
     );
   }
@@ -1119,7 +1122,7 @@ class _ResultsList extends StatelessWidget {
         child: Text(
           emptyHint,
           style: TextStyle(
-              color: Colors.white.withOpacity(0.3), fontSize: 13),
+              color: AppColors.textSecondary(context), fontSize: 13),
           textAlign: TextAlign.center,
         ),
       );
@@ -1131,6 +1134,9 @@ class _ResultsList extends StatelessWidget {
         final r = results[i];
         final isSelected = r.symbol == selected;
         final price = prices[r.symbol.toUpperCase()];
+        final primary = Theme.of(context).colorScheme.primary;
+        final outline = Theme.of(context).colorScheme.outline;
+        final onSurface = Theme.of(context).colorScheme.onSurface;
         return GestureDetector(
           onTap: () => onSelect(r),
           child: Container(
@@ -1139,13 +1145,13 @@ class _ResultsList extends StatelessWidget {
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppColors.darkPrimary.withOpacity(0.15)
-                  : Colors.white.withValues(alpha: 0.04),
+                  ? primary.withValues(alpha: 0.1)
+                  : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isSelected
-                    ? AppColors.darkPrimary.withOpacity(0.5)
-                    : Colors.white.withValues(alpha: 0.07),
+                    ? primary.withValues(alpha: 0.5)
+                    : outline.withValues(alpha: 0.2),
               ),
             ),
             child: Row(
@@ -1156,16 +1162,16 @@ class _ResultsList extends StatelessWidget {
                     children: [
                       Text(
                         r.symbol,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: onSurface,
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                         ),
                       ),
                       Text(
                         r.name,
-                        style: const TextStyle(
-                            color: Colors.white54, fontSize: 12),
+                        style: TextStyle(
+                            color: AppColors.textSecondary(context), fontSize: 12),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -1178,21 +1184,21 @@ class _ResultsList extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.07),
+                    color: outline.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     r.type,
-                    style: const TextStyle(
-                        color: Colors.white54,
+                    style: TextStyle(
+                        color: AppColors.textSecondary(context),
                         fontSize: 11,
                         fontWeight: FontWeight.w600),
                   ),
                 ),
                 if (isSelected) ...[
                   const SizedBox(width: 8),
-                  const Icon(Icons.check_circle,
-                      color: AppColors.darkPositive, size: 18),
+                  Icon(Icons.check_circle,
+                      color: AppColors.positive(context), size: 18),
                 ],
               ],
             ),
@@ -1223,7 +1229,7 @@ class _PriceTag extends StatelessWidget {
       return Text(
         '···',
         style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.2),
+          color: AppColors.textSecondary(context).withValues(alpha: 0.5),
           fontSize: 12,
           letterSpacing: 2,
         ),
@@ -1232,7 +1238,7 @@ class _PriceTag extends StatelessWidget {
     return Text(
       _fmt(price!),
       style: TextStyle(
-        color: AppColors.darkPositive.withValues(alpha: 0.9),
+        color: AppColors.positive(context),
         fontSize: 13,
         fontWeight: FontWeight.w700,
       ),

@@ -41,7 +41,7 @@ class SettingsScreen extends ConsumerWidget {
                   ? ClipOval(child: buildProfileImage(user!.photoUrl!, 48))
                   : CircleAvatar(
                       radius: 24,
-                      backgroundColor: AppColors.darkPrimary,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
                       child: Text(
                         user?.displayName.substring(0, 1).toUpperCase() ?? 'D',
                         style: const TextStyle(
@@ -101,29 +101,29 @@ class SettingsScreen extends ConsumerWidget {
                 ],
                 Divider(height: 1, color: theme.colorScheme.outline),
                 ListTile(
-                  leading: const Icon(Icons.restart_alt,
-                      color: AppColors.darkSecondary),
-                  title: const Text('Fortschritt zurücksetzen [TEST]',
-                      style: TextStyle(color: AppColors.darkSecondary)),
+                  leading: Icon(Icons.restart_alt,
+                      color: theme.colorScheme.error),
+                  title: Text('Fortschritt zurücksetzen [TEST]',
+                      style: TextStyle(color: theme.colorScheme.error)),
                   subtitle: const Text('Löscht alle Badges & Fortschritt'),
                   onTap: () => _resetGamification(context, ref),
                 ),
                 Divider(height: 1, color: theme.colorScheme.outline),
                 SwitchListTile(
-                  secondary: const Icon(Icons.workspace_premium_outlined,
-                      color: AppColors.darkSecondary),
-                  title: const Text('PRO Modus [TEST]',
-                      style: TextStyle(color: AppColors.darkSecondary)),
+                  secondary: Icon(Icons.workspace_premium_outlined,
+                      color: theme.colorScheme.error),
+                  title: Text('PRO Modus [TEST]',
+                      style: TextStyle(color: theme.colorScheme.error)),
                   subtitle: const Text('Schaltet PRO-Analysen frei'),
                   value: ref.watch(isProProvider),
                   onChanged: (_) => ref.read(isProProvider.notifier).toggle(),
                 ),
                 Divider(height: 1, color: theme.colorScheme.outline),
                 ListTile(
-                  leading: const Icon(Icons.notification_add_outlined,
-                      color: AppColors.darkSecondary),
-                  title: const Text('Badge-Indikator testen [TEST]',
-                      style: TextStyle(color: AppColors.darkSecondary)),
+                  leading: Icon(Icons.notification_add_outlined,
+                      color: theme.colorScheme.error),
+                  title: Text('Badge-Indikator testen [TEST]',
+                      style: TextStyle(color: theme.colorScheme.error)),
                   subtitle: const Text('Zeigt +1 Indikator auf Avatar & Badges'),
                   onTap: () {
                     ref.read(newBadgeCountProvider.notifier).add(1);
@@ -161,15 +161,15 @@ class SettingsScreen extends ConsumerWidget {
                           ListTile(
                             leading: Icon(
                               Icons.notifications_outlined,
-                              color: notifEnabled ? null : AppColors.darkSecondary,
+                              color: notifEnabled ? null : Theme.of(context).colorScheme.error,
                             ),
                             title: const Text('Festgeld-Erinnerungen'),
                             subtitle: const Text('30, 7, 1 Tag vor Fälligkeit'),
                             trailing: notifEnabled
-                                ? const Icon(Icons.check_circle_outline,
-                                    color: AppColors.darkPositive)
-                                : const Icon(Icons.cancel_outlined,
-                                    color: AppColors.darkSecondary),
+                                ? Icon(Icons.check_circle_outline,
+                                    color: AppColors.positive(context))
+                                : Icon(Icons.cancel_outlined,
+                                    color: Theme.of(context).colorScheme.error),
                             onTap: notifEnabled
                                 ? () => NotificationService.instance.showTestNotification()
                                 : null,
@@ -177,10 +177,10 @@ class SettingsScreen extends ConsumerWidget {
                           if (!notifEnabled) ...[
                             Divider(height: 1, color: Theme.of(context).colorScheme.outline),
                             ListTile(
-                              leading: const Icon(Icons.warning_amber_rounded,
-                                  color: AppColors.darkSecondary),
-                              title: const Text('Benachrichtigungen deaktiviert',
-                                  style: TextStyle(color: AppColors.darkSecondary)),
+                              leading: Icon(Icons.warning_amber_rounded,
+                                  color: Theme.of(context).colorScheme.error),
+                              title: Text('Benachrichtigungen deaktiviert',
+                                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
                               subtitle: const Text('Tippe, um in Einstellungen zu aktivieren'),
                               trailing: const Icon(Icons.open_in_new, size: 18),
                               onTap: () => AppSettings.openAppSettings(
@@ -189,10 +189,10 @@ class SettingsScreen extends ConsumerWidget {
                           ] else if (!exactEnabled) ...[
                             Divider(height: 1, color: Theme.of(context).colorScheme.outline),
                             ListTile(
-                              leading: const Icon(Icons.warning_amber_rounded,
-                                  color: AppColors.darkSecondary),
-                              title: const Text('Genaue Erinnerungen deaktiviert',
-                                  style: TextStyle(color: AppColors.darkSecondary)),
+                              leading: Icon(Icons.warning_amber_rounded,
+                                  color: Theme.of(context).colorScheme.error),
+                              title: Text('Genaue Erinnerungen deaktiviert',
+                                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
                               subtitle: const Text('Tippe, um "Alarme & Erinnerungen" zu erlauben'),
                               trailing: const Icon(Icons.open_in_new, size: 18),
                               onTap: () => NotificationService.instance
@@ -221,10 +221,10 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 Divider(height: 1, color: theme.colorScheme.outline),
                 ListTile(
-                  leading: const Icon(Icons.delete_forever_outlined,
-                      color: AppColors.darkSecondary),
-                  title: const Text('Alle Daten löschen',
-                      style: TextStyle(color: AppColors.darkSecondary)),
+                  leading: Icon(Icons.delete_forever_outlined,
+                      color: theme.colorScheme.error),
+                  title: Text('Alle Daten löschen',
+                      style: TextStyle(color: theme.colorScheme.error)),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _deleteAllData(context, ref),
                 ),
@@ -236,14 +236,14 @@ class SettingsScreen extends ConsumerWidget {
           // Account
           _SectionHeader('Account'),
           _SectionCard(
-            child: ListTile(
-              leading: const Icon(Icons.logout, color: AppColors.darkSecondary),
-              title: const Text('Abmelden',
-                  style: TextStyle(color: AppColors.darkSecondary)),
+            child: Builder(builder: (ctx) => ListTile(
+              leading: Icon(Icons.logout, color: Theme.of(ctx).colorScheme.error),
+              title: Text('Abmelden',
+                  style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
               onTap: () async {
                 await ref.read(authRepositoryProvider).signOut();
               },
-            ),
+            )),
           ),
           const SizedBox(height: 32),
 
