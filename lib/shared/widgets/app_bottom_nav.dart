@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/router/app_router.dart';
 import '../../features/gamification/providers/gamification_providers.dart';
 import '../../features/gamification/widgets/avatar_leading.dart';
 
@@ -10,10 +11,19 @@ class AppScaffold extends ConsumerWidget {
 
   final StatefulNavigationShell navigationShell;
 
+  static const _rootTabRoutes = {
+    AppRoutes.home,
+    AppRoutes.investments,
+    AppRoutes.accounts,
+    AppRoutes.debts,
+    AppRoutes.analyse,
+  };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final homeTabBadgeCount = ref.watch(homeTabBadgeCountProvider);
     final topPadding = MediaQuery.viewPaddingOf(context).top;
+    final router = GoRouter.of(context);
 
     return PopScope(
       canPop: navigationShell.currentIndex == 0,
@@ -26,13 +36,24 @@ class AppScaffold extends ConsumerWidget {
         body: Stack(
           children: [
             navigationShell,
-            // Persistent avatar — single instance above all tab trees,
-            // never flashes or reloads when switching tabs.
-            Positioned(
-              top: topPadding,
-              left: 0,
-              height: 60,
-              child: const AvatarLeading(),
+            // Avatar only shown on root tabs — not on sub-pages with back arrows.
+            // ListenableBuilder on routerDelegate ensures this re-evaluates on
+            // every push AND pop, not just on forward navigation.
+            ListenableBuilder(
+              listenable: router.routerDelegate,
+              builder: (_, __) {
+                final location =
+                    router.routerDelegate.currentConfiguration.uri.path;
+                if (!_rootTabRoutes.contains(location)) {
+                  return const SizedBox.shrink();
+                }
+                return Positioned(
+                  top: topPadding,
+                  left: 0,
+                  height: 60,
+                  child: const AvatarLeading(),
+                );
+              },
             ),
           ],
         ),
@@ -104,6 +125,11 @@ class AppBottomNav extends StatelessWidget {
             icon: Icon(Icons.balance_outlined),
             activeIcon: Icon(Icons.balance),
             label: 'Schulden',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.query_stats_outlined),
+            activeIcon: Icon(Icons.query_stats),
+            label: 'Analyse',
           ),
         ],
       ),

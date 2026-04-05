@@ -27,6 +27,13 @@ class AppColors {
   static const lightTextSecondary = Color(0xFF5A6070);
   static const lightBorder = Color(0xFFD0D5E8);
 
+  // --- Chart Colors (brighter than gradient starts for chart visibility) ---
+  static const chartGiro     = Color(0xFF7B8FFF);
+  static const chartFestgeld = Color(0xFFE090E0);
+  static const chartEtf      = Color(0xFF4DB8F5);
+  static const chartCrypto   = Color(0xFFEE7AA0);
+  static const chartPhysical = Color(0xFF4DD87C);
+
   // --- Category Gradients ---
   static const gradientGiro = [Color(0xFF5265BB), Color(0xFF5E3C82)];
   static const gradientFestgeld = [Color(0xFFC076C9), Color(0xFFC44656)];
