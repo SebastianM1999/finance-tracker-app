@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'badge_definition.dart';
 import 'gamification_tier.dart';
 
 /// Stored at users/{uid}/gamification/profile

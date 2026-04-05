@@ -67,12 +67,10 @@ class _BadgeToastWidget extends StatefulWidget {
   const _BadgeToastWidget({
     required this.badge,
     required this.onDismiss,
-    this.onTap,
   });
 
   final BadgeDefinition badge;
   final VoidCallback onDismiss;
-  final VoidCallback? onTap;
 
   @override
   State<_BadgeToastWidget> createState() => _BadgeToastWidgetState();
@@ -160,10 +158,7 @@ class _BadgeToastWidgetState extends State<_BadgeToastWidget>
               type: MaterialType.transparency,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  _dismiss();
-                  widget.onTap?.call();
-                },
+                onTap: _dismiss,
                 // Stack with Clip.none so border glow can bleed outside card bounds
                 child: Stack(
                   clipBehavior: Clip.none,
