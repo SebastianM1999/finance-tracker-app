@@ -12,6 +12,7 @@ import '../../auth/providers/auth_providers.dart';
 import '../../festgeld/models/festgeld.dart';
 import '../../gamification/utils/gamification_trigger.dart';
 import '../../investments/screens/investments_screen.dart';
+import '../../screenshot_import/widgets/import_chat_sheet.dart';
 import '../providers/home_providers.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -69,6 +70,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => showImportChatSheet(context),
+        icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+        label: const Text(
+          'KI-Import',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 4,
+      ).animate().fadeIn(delay: 400.ms, duration: 300.ms).slideY(begin: 0.3, end: 0, delay: 400.ms, duration: 300.ms),
       body: RefreshIndicator(
         onRefresh: () => _refresh(context),
         child: CustomScrollView(
