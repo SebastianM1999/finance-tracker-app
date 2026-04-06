@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -8,7 +9,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/currency_formatter.dart';
 import '../../festgeld/models/festgeld.dart';
 import '../../giro/models/giro_account.dart';
 import '../../home/providers/home_providers.dart';
@@ -23,6 +23,47 @@ void showImportChatSheet(BuildContext context) {
     backgroundColor: Colors.transparent,
     builder: (_) => const ImportChatSheet(),
   );
+}
+
+// ── Per-result editable field controllers ─────────────────────────────────────
+
+class _ResultControllers {
+  _ResultControllers(ParsedAsset a)
+      : bank = TextEditingController(text: a.bankOrBroker ?? ''),
+        label = TextEditingController(text: a.label ?? ''),
+        amount = TextEditingController(
+            text: a.primaryAmount != null
+                ? a.primaryAmount!.toStringAsFixed(2)
+                : ''),
+        rate = TextEditingController(
+            text: a.interestRate != null
+                ? a.interestRate!.toStringAsFixed(2)
+                : ''),
+        months = TextEditingController(
+            text: a.durationMonths?.toString() ?? ''),
+        endDate = TextEditingController(
+            text: a.endDate != null ? _fmt(a.endDate!) : '');
+
+  final TextEditingController bank;
+  final TextEditingController label;
+  final TextEditingController amount;
+  final TextEditingController rate;
+  final TextEditingController months;
+  final TextEditingController endDate;
+
+  static String _fmt(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}'
+      '.${d.month.toString().padLeft(2, '0')}'
+      '.${d.year}';
+
+  void dispose() {
+    bank.dispose();
+    label.dispose();
+    amount.dispose();
+    rate.dispose();
+    months.dispose();
+    endDate.dispose();
+  }
 }
 
 // ── Sheet widget ──────────────────────────────────────────────────────────────
@@ -41,15 +82,25 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
 
   List<XFile> _images = [];
   List<ParsedAsset> _results = [];
+  List<_ResultControllers> _controllers = [];
   bool _isAnalyzing = false;
   final Set<int> _savedIndices = {};
   final Set<int> _savingIndices = {};
+  final Set<int> _discardedIndices = {};
 
   @override
   void dispose() {
     _hintController.dispose();
     _textRecognizer.close();
+    _disposeControllers();
     super.dispose();
+  }
+
+  void _disposeControllers() {
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    _controllers = [];
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -67,7 +118,10 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
       _isAnalyzing = true;
       _results = [];
       _savedIndices.clear();
+      _savingIndices.clear();
+      _discardedIndices.clear();
     });
+    _disposeControllers();
 
     try {
       final texts = <String>[];
@@ -82,6 +136,7 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
 
       setState(() {
         _results = parsed;
+        _controllers = parsed.map(_ResultControllers.new).toList();
         _isAnalyzing = false;
       });
     } catch (e) {
@@ -94,13 +149,12 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
     }
   }
 
-  Future<void> _save(int index) async {
+  Future<void> _save(int index, ParsedAssetType selectedType) async {
     if (_savingIndices.contains(index)) return;
     setState(() => _savingIndices.add(index));
 
     try {
-      final asset = _results[index];
-      await _saveAsset(asset);
+      await _saveFromControllers(index, selectedType);
       setState(() {
         _savedIndices.add(index);
         _savingIndices.remove(index);
@@ -115,17 +169,23 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
     }
   }
 
-  Future<void> _saveAsset(ParsedAsset asset) async {
+  Future<void> _saveFromControllers(
+      int index, ParsedAssetType type) async {
+    final ctrl = _controllers[index];
     final now = DateTime.now();
 
-    switch (asset.type) {
+    switch (type) {
       case ParsedAssetType.giro:
         final repo = ref.read(giroRepositoryProvider);
         await repo.add(GiroAccount(
           id: '',
-          bankName: asset.bankOrBroker ?? 'Unbekannte Bank',
-          accountLabel: asset.label ?? 'Girokonto',
-          balance: asset.primaryAmount ?? 0,
+          bankName: ctrl.bank.text.trim().isNotEmpty
+              ? ctrl.bank.text.trim()
+              : 'Unbekannte Bank',
+          accountLabel: ctrl.label.text.trim().isNotEmpty
+              ? ctrl.label.text.trim()
+              : 'Girokonto',
+          balance: _parseNum(ctrl.amount.text),
           currency: 'EUR',
           createdAt: now,
           updatedAt: now,
@@ -133,47 +193,65 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
 
       case ParsedAssetType.festgeld:
         final repo = ref.read(festgeldRepositoryProvider);
-        final rate = asset.interestRate ?? 0;
-        final months = asset.durationMonths ?? 12;
-        final amount = asset.primaryAmount ?? 0;
-        final endDate = asset.endDate ??
-            DateTime(now.year, now.month + months, now.day);
-        // Simple interest payout projection
-        final payout = amount + amount * (rate / 100) * (months / 12);
+        final amount = _parseNum(ctrl.amount.text);
+        final rate = _parseNum(ctrl.rate.text);
+        final dur = int.tryParse(ctrl.months.text.trim()) ?? 12;
+        final end = _parseDate(ctrl.endDate.text) ??
+            DateTime(now.year, now.month + dur, now.day);
+        final payout = amount + amount * (rate / 100) * (dur / 12);
         await repo.add(Festgeld(
           id: '',
-          bankName: asset.bankOrBroker ?? 'Unbekannte Bank',
+          bankName: ctrl.bank.text.trim().isNotEmpty
+              ? ctrl.bank.text.trim()
+              : 'Unbekannte Bank',
           amount: amount,
           interestRate: rate,
           startDate: now,
-          durationMonths: months,
-          endDate: endDate,
+          durationMonths: dur,
+          endDate: end,
           projectedPayout: payout,
           createdAt: now,
         ));
 
-      // ETF and Crypto are added with a note so the user can complete missing
-      // fields (shares, ticker, etc.) in the dedicated screens.
       case ParsedAssetType.etf:
       case ParsedAssetType.crypto:
       case ParsedAssetType.unknown:
-        // Not saved automatically – the result card shows a hint instead.
-        throw UnsupportedError(
-          'ETF/Crypto requires additional fields. Please add manually.',
-        );
+        throw UnsupportedError('Bitte manuell hinzufügen.');
     }
+  }
+
+  double _parseNum(String text) {
+    var s = text.trim().replaceAll(RegExp(r'[€\$\s]'), '');
+    if (s.contains(',') &&
+        s.contains('.') &&
+        s.lastIndexOf('.') < s.lastIndexOf(',')) {
+      // German: 1.234,56
+      s = s.replaceAll('.', '').replaceAll(',', '.');
+    } else if (s.contains(',')) {
+      s = s.replaceAll(',', '.');
+    }
+    return double.tryParse(s) ?? 0;
+  }
+
+  DateTime? _parseDate(String text) {
+    final m = RegExp(r'(\d{2})\.(\d{2})\.(\d{4})').firstMatch(text.trim());
+    if (m == null) return null;
+    return DateTime(
+      int.parse(m.group(3)!),
+      int.parse(m.group(2)!),
+      int.parse(m.group(1)!),
+    );
   }
 
   // ── UI ─────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final surface = AppColors.surface(context);
     final primary = AppColors.primary(context);
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.85,
+      initialChildSize: 0.88,
       minChildSize: 0.5,
       maxChildSize: 0.95,
       builder: (_, scrollController) => Container(
@@ -183,7 +261,6 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
         ),
         child: Column(
           children: [
-            // ── Drag handle
             Padding(
               padding: const EdgeInsets.only(top: 12, bottom: 4),
               child: Container(
@@ -195,14 +272,13 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
                 ),
               ),
             ),
-            // ── Scrollable body
             Expanded(
               child: ListView(
                 controller: scrollController,
                 padding: EdgeInsets.only(
                   left: 20,
                   right: 20,
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 32,
                 ),
                 children: [
                   const SizedBox(height: 8),
@@ -224,13 +300,33 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
                     primary: primary,
                   ),
                   if (_results.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    _ResultsSection(
-                      results: _results,
-                      savedIndices: _savedIndices,
-                      savingIndices: _savingIndices,
-                      onSave: _save,
-                    ),
+                    const SizedBox(height: 28),
+                    _SectionHeader(count: _results.length - _discardedIndices.length),
+                    const SizedBox(height: 12),
+                    ..._results.asMap().entries
+                        .where((e) => !_discardedIndices.contains(e.key))
+                        .map((e) {
+                      final i = e.key;
+                      return _EditableResultCard(
+                        key: ValueKey(i),
+                        asset: _results[i],
+                        ctrl: _controllers[i],
+                        isSaved: _savedIndices.contains(i),
+                        isSaving: _savingIndices.contains(i),
+                        onSave: (type) => _save(i, type),
+                        onDiscard: () =>
+                            setState(() => _discardedIndices.add(i)),
+                      )
+                          .animate()
+                          .fadeIn(
+                              delay: Duration(milliseconds: i * 80),
+                              duration: 300.ms)
+                          .slideY(
+                              begin: 0.08,
+                              end: 0,
+                              delay: Duration(milliseconds: i * 80),
+                              duration: 300.ms);
+                    }),
                   ],
                 ],
               ),
@@ -242,7 +338,7 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
   }
 }
 
-// ── Sub-widgets ───────────────────────────────────────────────────────────────
+// ── Header ────────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
   const _Header({required this.primary});
@@ -277,8 +373,7 @@ class _Header extends StatelessWidget {
               Text(
                 'Screenshot hochladen – ich erkenne die Daten automatisch.',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary(context),
-                ),
+                    color: AppColors.textSecondary(context)),
               ),
             ],
           ),
@@ -298,7 +393,7 @@ class _ImageSection extends StatelessWidget {
   });
   final List<XFile> images;
   final VoidCallback onAdd;
-  final void Function(int index) onRemove;
+  final void Function(int) onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -314,7 +409,6 @@ class _ImageSection extends StatelessWidget {
           child: ListView(
             scrollDirection: Axis.horizontal,
             children: [
-              // Add button
               GestureDetector(
                 onTap: onAdd,
                 child: Container(
@@ -324,15 +418,12 @@ class _ImageSection extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: primary.withValues(alpha: 0.3),
-                        style: BorderStyle.solid),
+                    border: Border.all(color: primary.withValues(alpha: 0.3)),
                   ),
                   child: Icon(Icons.add_photo_alternate_outlined,
                       color: primary, size: 28),
                 ),
               ),
-              // Thumbnails
               ...images.asMap().entries.map((e) => _Thumbnail(
                     file: File(e.value.path),
                     onRemove: () => onRemove(e.key),
@@ -374,10 +465,9 @@ class _Thumbnail extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(2),
               decoration: const BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.close, color: Colors.white, size: 12),
+                  color: Colors.black54, shape: BoxShape.circle),
+              child:
+                  const Icon(Icons.close, color: Colors.white, size: 12),
             ),
           ),
         ),
@@ -406,9 +496,8 @@ class _HintField extends StatelessWidget {
           style: theme.textTheme.bodyMedium,
           decoration: InputDecoration(
             hintText: 'z.B. "alle 4 sind Festgeld" oder "das ist Krypto"',
-            hintStyle: theme.textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary(context),
-            ),
+            hintStyle: theme.textTheme.bodyMedium
+                ?.copyWith(color: AppColors.textSecondary(context)),
             filled: true,
             fillColor: AppColors.surfaceVariant(context),
             border: OutlineInputBorder(
@@ -463,15 +552,15 @@ class _AnalyzeButton extends StatelessWidget {
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
+                      strokeWidth: 2, color: Colors.white),
                 )
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.auto_awesome_rounded,
-                        color: enabled ? Colors.white : AppColors.textSecondary(context),
+                        color: enabled
+                            ? Colors.white
+                            : AppColors.textSecondary(context),
                         size: 18),
                     const SizedBox(width: 8),
                     Text(
@@ -492,101 +581,71 @@ class _AnalyzeButton extends StatelessWidget {
   }
 }
 
-// ── Results section ───────────────────────────────────────────────────────────
+// ── Section header ────────────────────────────────────────────────────────────
 
-class _ResultsSection extends StatelessWidget {
-  const _ResultsSection({
-    required this.results,
-    required this.savedIndices,
-    required this.savingIndices,
-    required this.onSave,
-  });
-  final List<ParsedAsset> results;
-  final Set<int> savedIndices;
-  final Set<int> savingIndices;
-  final void Function(int) onSave;
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.count});
+  final int count;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final primary = AppColors.primary(context);
+    return Row(
       children: [
-        Row(
-          children: [
-            Text('Erkannte Positionen',
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.primary(context).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                '${results.length}',
-                style: TextStyle(
-                  color: AppColors.primary(context),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
+        Text('Erkannte Positionen',
+            style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '$count',
+            style: TextStyle(
+                color: primary, fontSize: 11, fontWeight: FontWeight.w700),
+          ),
         ),
-        const SizedBox(height: 10),
-        ...results.asMap().entries.map((e) {
-          final i = e.key;
-          return _ResultCard(
-            asset: e.value,
-            isSaved: savedIndices.contains(i),
-            isSaving: savingIndices.contains(i),
-            onSave: () => onSave(i),
-          )
-              .animate()
-              .fadeIn(delay: Duration(milliseconds: i * 80), duration: 300.ms)
-              .slideY(
-                begin: 0.1,
-                end: 0,
-                delay: Duration(milliseconds: i * 80),
-                duration: 300.ms,
-              );
-        }),
+        const SizedBox(width: 8),
+        Text(
+          '– Werte prüfen & anpassen',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: AppColors.textSecondary(context)),
+        ),
       ],
     );
   }
 }
 
-// ── Result card ───────────────────────────────────────────────────────────────
+// ── Editable result card ──────────────────────────────────────────────────────
 
-class _ResultCard extends StatelessWidget {
-  const _ResultCard({
+class _EditableResultCard extends StatefulWidget {
+  const _EditableResultCard({
+    super.key,
     required this.asset,
+    required this.ctrl,
     required this.isSaved,
     required this.isSaving,
     required this.onSave,
+    required this.onDiscard,
   });
   final ParsedAsset asset;
+  final _ResultControllers ctrl;
   final bool isSaved;
   final bool isSaving;
-  final VoidCallback onSave;
+  final void Function(ParsedAssetType selectedType) onSave;
+  final VoidCallback onDiscard;
 
-  static const _typeGradients = {
-    ParsedAssetType.giro: AppColors.gradientGiro,
-    ParsedAssetType.festgeld: AppColors.gradientFestgeld,
-    ParsedAssetType.etf: AppColors.gradientEtf,
-    ParsedAssetType.crypto: AppColors.gradientCrypto,
-    ParsedAssetType.unknown: AppColors.gradientGiro,
-  };
+  @override
+  State<_EditableResultCard> createState() => _EditableResultCardState();
+}
 
-  static const _typeIcons = {
-    ParsedAssetType.giro: FontAwesomeIcons.buildingColumns,
-    ParsedAssetType.festgeld: FontAwesomeIcons.piggyBank,
-    ParsedAssetType.etf: FontAwesomeIcons.chartLine,
-    ParsedAssetType.crypto: FontAwesomeIcons.coins,
-    ParsedAssetType.unknown: FontAwesomeIcons.circleQuestion,
-  };
+class _EditableResultCardState extends State<_EditableResultCard> {
+  final _formKey = GlobalKey<FormState>();
+  late ParsedAssetType _type;
 
   static const _typeLabels = {
     ParsedAssetType.giro: 'Girokonto',
@@ -595,173 +654,35 @@ class _ResultCard extends StatelessWidget {
     ParsedAssetType.crypto: 'Krypto',
     ParsedAssetType.unknown: 'Unbekannt',
   };
-
-  bool get _canAutoSave =>
-      asset.type == ParsedAssetType.giro ||
-      asset.type == ParsedAssetType.festgeld;
+  static const _typeGradients = {
+    ParsedAssetType.giro: AppColors.gradientGiro,
+    ParsedAssetType.festgeld: AppColors.gradientFestgeld,
+    ParsedAssetType.etf: AppColors.gradientEtf,
+    ParsedAssetType.crypto: AppColors.gradientCrypto,
+    ParsedAssetType.unknown: AppColors.gradientGiro,
+  };
+  static const _typeIcons = {
+    ParsedAssetType.giro: FontAwesomeIcons.buildingColumns,
+    ParsedAssetType.festgeld: FontAwesomeIcons.piggyBank,
+    ParsedAssetType.etf: FontAwesomeIcons.chartLine,
+    ParsedAssetType.crypto: FontAwesomeIcons.coins,
+    ParsedAssetType.unknown: FontAwesomeIcons.circleQuestion,
+  };
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final gradient = _typeGradients[asset.type]!;
-    final icon = _typeIcons[asset.type]!;
-    final typeLabel = _typeLabels[asset.type]!;
+  void initState() {
+    super.initState();
+    _type = widget.asset.type == ParsedAssetType.unknown
+        ? ParsedAssetType.giro
+        : widget.asset.type;
+  }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface(context),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border(context)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Header row
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: gradient,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: FaIcon(icon, color: Colors.white, size: 14),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(typeLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: AppColors.textSecondary(context),
-                          )),
-                      Text(
-                        asset.bankOrBroker ?? 'Unbekannte Bank',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-                // Confidence badge
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: _confidenceColor(asset.confidence)
-                        .withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '${(asset.confidence * 100).round()}%',
-                    style: TextStyle(
-                      color: _confidenceColor(asset.confidence),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+  bool get _canAutoSave =>
+      _type == ParsedAssetType.giro || _type == ParsedAssetType.festgeld;
 
-            // ── Extracted fields
-            if (asset.primaryAmount != null)
-              _Field(
-                label: asset.type == ParsedAssetType.giro
-                    ? 'Kontostand'
-                    : 'Betrag',
-                value: CurrencyFormatter.format(asset.primaryAmount!),
-                highlight: true,
-              ),
-            if (asset.label != null)
-              _Field(label: 'Bezeichnung', value: asset.label!),
-            if (asset.interestRate != null)
-              _Field(
-                  label: 'Zinssatz',
-                  value: '${asset.interestRate!.toStringAsFixed(2)} % p.a.'),
-            if (asset.durationMonths != null)
-              _Field(
-                  label: 'Laufzeit',
-                  value: '${asset.durationMonths} Monate'),
-            if (asset.endDate != null)
-              _Field(
-                label: 'Fälligkeit',
-                value:
-                    '${asset.endDate!.day.toString().padLeft(2, '0')}.${asset.endDate!.month.toString().padLeft(2, '0')}.${asset.endDate!.year}',
-              ),
-            if (asset.ticker != null)
-              _Field(label: 'Ticker / ISIN', value: asset.ticker!),
-            if (asset.shares != null)
-              _Field(label: 'Anteile', value: '${asset.shares}'),
-            if (asset.coinName != null)
-              _Field(label: 'Coin', value: asset.coinName!),
-
-            // ── Note for unsupported auto-save types
-            if (!_canAutoSave) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(
-                  color: AppColors.warning(context).withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline,
-                        size: 14, color: AppColors.warning(context)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Bitte manuell unter ETF/Krypto ergänzen.',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.warning(context),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 12),
-
-            // ── Save button
-            if (_canAutoSave)
-              SizedBox(
-                width: double.infinity,
-                child: AnimatedSwitcher(
-                  duration: 250.ms,
-                  child: isSaved
-                      ? _SavedChip(key: const ValueKey('saved'))
-                      : _SaveButton(
-                          key: const ValueKey('save'),
-                          isLoading: isSaving,
-                          onTap: onSave,
-                        ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
+  void _handleSave() {
+    if (!_formKey.currentState!.validate()) return;
+    widget.onSave(_type);
   }
 
   Color _confidenceColor(double v) {
@@ -769,111 +690,502 @@ class _ResultCard extends StatelessWidget {
     if (v >= 0.4) return const Color(0xFFFFB347);
     return const Color(0xFFFF6B6B);
   }
-}
-
-class _Field extends StatelessWidget {
-  const _Field({required this.label, required this.value, this.highlight = false});
-  final String label;
-  final String value;
-  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final gradient = _typeGradients[_type]!;
+    final icon = _typeIcons[_type]!;
+    final isSaved = widget.isSaved;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Text(
-            '$label: ',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary(context),
-            ),
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface(context),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSaved
+                ? AppColors.positive(context).withValues(alpha: 0.4)
+                : AppColors.border(context),
           ),
-          Text(
-            value,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: highlight ? FontWeight.w700 : FontWeight.w500,
-              color: highlight ? AppColors.primary(context) : null,
-              fontSize: highlight ? 14 : null,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
             ),
+          ],
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Coloured top bar
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: gradient,
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(17)),
+                ),
+                child: Row(
+                  children: [
+                    FaIcon(icon, color: Colors.white, size: 14),
+                    const SizedBox(width: 8),
+                    Text(
+                      _typeLabels[_type]!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const Spacer(),
+                    // Confidence badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${(widget.asset.confidence * 100).round()}% erkannt',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Type selector chips
+                    if (!isSaved) ...[
+                      _TypeSelector(
+                        selected: _type,
+                        onChanged: (t) => setState(() => _type = t),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // ── Common field: Bank name
+                    _InputField(
+                      label: 'Bank / Anbieter',
+                      controller: widget.ctrl.bank,
+                      enabled: !isSaved,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Pflichtfeld'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+
+                    // ── Giro fields
+                    if (_type == ParsedAssetType.giro) ...[
+                      _InputField(
+                        label: 'Bezeichnung',
+                        controller: widget.ctrl.label,
+                        enabled: !isSaved,
+                        hint: 'z.B. Girokonto, Gehaltskonto',
+                      ),
+                      const SizedBox(height: 10),
+                      _InputField(
+                        label: 'Kontostand (€)',
+                        controller: widget.ctrl.amount,
+                        enabled: !isSaved,
+                        keyboard: TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'[\d.,]')),
+                        ],
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Pflichtfeld' : null,
+                      ),
+                    ],
+
+                    // ── Festgeld fields
+                    if (_type == ParsedAssetType.festgeld) ...[
+                      _InputField(
+                        label: 'Betrag (€)',
+                        controller: widget.ctrl.amount,
+                        enabled: !isSaved,
+                        keyboard: TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'[\d.,]')),
+                        ],
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Pflichtfeld' : null,
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _InputField(
+                              label: 'Zinssatz (% p.a.)',
+                              controller: widget.ctrl.rate,
+                              enabled: !isSaved,
+                              keyboard: TextInputType.numberWithOptions(
+                                  decimal: true),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'[\d.,]')),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _InputField(
+                              label: 'Laufzeit (Monate)',
+                              controller: widget.ctrl.months,
+                              enabled: !isSaved,
+                              keyboard: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _InputField(
+                        label: 'Fälligkeitsdatum (TT.MM.JJJJ)',
+                        controller: widget.ctrl.endDate,
+                        enabled: !isSaved,
+                        hint: '31.12.2026',
+                        keyboard: TextInputType.datetime,
+                      ),
+                    ],
+
+                    // ── ETF / Crypto: manual note
+                    if (_type == ParsedAssetType.etf ||
+                        _type == ParsedAssetType.crypto) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning(context)
+                              .withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline,
+                                size: 16,
+                                color: AppColors.warning(context)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _type == ParsedAssetType.etf
+                                    ? 'ETF/Aktien benötigen Ticker & Stückzahl. Bitte manuell unter "ETF & Aktien" hinzufügen.'
+                                    : 'Krypto benötigt Coin & Menge. Bitte manuell unter "Krypto" hinzufügen.',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.warning(context)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 16),
+
+                    // ── Action buttons
+                    AnimatedSwitcher(
+                      duration: 250.ms,
+                      child: isSaved
+                          ? _SavedRow(key: const ValueKey('saved'))
+                          : _ActionRow(
+                              key: const ValueKey('actions'),
+                              canSave: _canAutoSave,
+                              isSaving: widget.isSaving,
+                              onSave: _handleSave,
+                              onDiscard: widget.onDiscard,
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _SaveButton extends StatelessWidget {
-  const _SaveButton({super.key, required this.isLoading, required this.onTap});
-  final bool isLoading;
-  final VoidCallback onTap;
+// ── Type selector ─────────────────────────────────────────────────────────────
+
+class _TypeSelector extends StatelessWidget {
+  const _TypeSelector({required this.selected, required this.onChanged});
+  final ParsedAssetType selected;
+  final void Function(ParsedAssetType) onChanged;
+
+  static const _options = [
+    (ParsedAssetType.giro, 'Giro'),
+    (ParsedAssetType.festgeld, 'Festgeld'),
+    (ParsedAssetType.etf, 'ETF'),
+    (ParsedAssetType.crypto, 'Krypto'),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final primary = AppColors.primary(context);
-    return GestureDetector(
-      onTap: isLoading ? null : onTap,
-      child: Container(
-        height: 40,
-        decoration: BoxDecoration(
-          color: primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: primary.withValues(alpha: 0.3)),
-        ),
-        child: Center(
-          child: isLoading
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: primary),
-                )
-              : Text(
-                  'Speichern',
-                  style: TextStyle(
-                    color: primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+    return Row(
+      children: _options.map((opt) {
+        final (type, label) = opt;
+        final active = type == selected;
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: GestureDetector(
+              onTap: () => onChanged(type),
+              child: AnimatedContainer(
+                duration: 150.ms,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: active
+                      ? primary.withValues(alpha: 0.12)
+                      : AppColors.surfaceVariant(context),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: active
+                        ? primary.withValues(alpha: 0.5)
+                        : Colors.transparent,
                   ),
                 ),
-        ),
-      ),
+                child: Center(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: active
+                          ? primary
+                          : AppColors.textSecondary(context),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
 
-class _SavedChip extends StatelessWidget {
-  const _SavedChip({super.key});
+// ── Input field ───────────────────────────────────────────────────────────────
+
+class _InputField extends StatelessWidget {
+  const _InputField({
+    required this.label,
+    required this.controller,
+    this.enabled = true,
+    this.hint,
+    this.keyboard,
+    this.inputFormatters,
+    this.validator,
+  });
+  final String label;
+  final TextEditingController controller;
+  final bool enabled;
+  final String? hint;
+  final TextInputType? keyboard;
+  final List<TextInputFormatter>? inputFormatters;
+  final String? Function(String?)? validator;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary(context),
+              fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 4),
+        TextFormField(
+          controller: controller,
+          enabled: enabled,
+          keyboardType: keyboard,
+          inputFormatters: inputFormatters,
+          validator: validator,
+          style: theme.textTheme.bodyMedium,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: theme.textTheme.bodyMedium
+                ?.copyWith(color: AppColors.textSecondary(context)),
+            filled: true,
+            fillColor: enabled
+                ? AppColors.surfaceVariant(context)
+                : AppColors.surfaceVariant(context).withValues(alpha: 0.5),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFFF6B6B)),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            isDense: true,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Action row ────────────────────────────────────────────────────────────────
+
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    super.key,
+    required this.canSave,
+    required this.isSaving,
+    required this.onSave,
+    required this.onDiscard,
+  });
+  final bool canSave;
+  final bool isSaving;
+  final VoidCallback onSave;
+  final VoidCallback onDiscard;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = AppColors.primary(context);
+    return Row(
+      children: [
+        // Discard
+        Expanded(
+          child: GestureDetector(
+            onTap: onDiscard,
+            child: Container(
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant(context),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Text(
+                  'Verwerfen',
+                  style: TextStyle(
+                    color: AppColors.textSecondary(context),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        // Save / confirm
+        Expanded(
+          flex: 2,
+          child: GestureDetector(
+            onTap: canSave ? onSave : null,
+            child: AnimatedContainer(
+              duration: 150.ms,
+              height: 42,
+              decoration: BoxDecoration(
+                gradient: canSave
+                    ? LinearGradient(
+                        colors: [primary, primary.withValues(alpha: 0.75)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      )
+                    : null,
+                color: canSave ? null : AppColors.border(context),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: isSaving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_rounded,
+                              size: 15,
+                              color: canSave
+                                  ? Colors.white
+                                  : AppColors.textSecondary(context)),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Bestätigen & Speichern',
+                            style: TextStyle(
+                              color: canSave
+                                  ? Colors.white
+                                  : AppColors.textSecondary(context),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Saved row ─────────────────────────────────────────────────────────────────
+
+class _SavedRow extends StatelessWidget {
+  const _SavedRow({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final positive = AppColors.positive(context);
     return Container(
-      height: 40,
+      height: 42,
       decoration: BoxDecoration(
-        color: AppColors.positive(context).withValues(alpha: 0.1),
+        color: positive.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: AppColors.positive(context).withValues(alpha: 0.3)),
+        border: Border.all(color: positive.withValues(alpha: 0.3)),
       ),
       child: Center(
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle_outline,
-                size: 15, color: AppColors.positive(context)),
+            Icon(Icons.check_circle_outline, size: 16, color: positive),
             const SizedBox(width: 6),
             Text(
               'Gespeichert',
               style: TextStyle(
-                color: AppColors.positive(context),
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
+                  color: positive,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13),
             ),
           ],
         ),
       ),
-    ).animate().scale(begin: const Offset(0.9, 0.9), duration: 200.ms);
+    ).animate().scale(begin: const Offset(0.92, 0.92), duration: 200.ms);
   }
 }
