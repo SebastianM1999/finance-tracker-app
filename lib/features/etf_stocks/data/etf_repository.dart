@@ -18,6 +18,10 @@ class EtfRepository {
       .map((s) => s.docs.map(EtfPosition.fromFirestore).toList());
 
   Future<DocumentReference> add(EtfPosition p) => _col.add(p.toFirestore());
+
+  void prepareBatchAdd(WriteBatch batch, EtfPosition p) =>
+      batch.set(_col.doc(), p.toFirestore());
+
   Future<void> update(EtfPosition p) => _col.doc(p.id).update(p.toFirestore());
   Future<void> delete(String id) => _col.doc(id).delete();
 }

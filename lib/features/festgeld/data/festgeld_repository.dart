@@ -19,6 +19,9 @@ class FestgeldRepository {
 
   Future<DocumentReference> add(Festgeld f) => _col.add(f.toFirestore());
 
+  void prepareBatchAdd(WriteBatch batch, Festgeld f) =>
+      batch.set(_col.doc(), f.toFirestore());
+
   Future<void> update(Festgeld f) => _col.doc(f.id).update(f.toFirestore());
 
   Future<void> delete(String id) => _col.doc(id).delete();

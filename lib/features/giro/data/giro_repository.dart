@@ -20,6 +20,9 @@ class GiroRepository {
   Future<void> add(GiroAccount account) =>
       _col.doc(account.id.isEmpty ? null : account.id).set(account.toFirestore());
 
+  void prepareBatchAdd(WriteBatch batch, GiroAccount account) =>
+      batch.set(_col.doc(), account.toFirestore());
+
   Future<void> update(GiroAccount account) =>
       _col.doc(account.id).update(account.toFirestore());
 

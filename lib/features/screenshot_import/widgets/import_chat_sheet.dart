@@ -1,27 +1,36 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../../core/theme/app_colors.dart';
+import '../../crypto/models/crypto_position.dart';
+import '../../etf_stocks/models/etf_position.dart';
 import '../../festgeld/models/festgeld.dart';
 import '../../giro/models/giro_account.dart';
 import '../../home/providers/home_providers.dart';
 import '../services/financial_parser.dart';
+import '../services/gemini_parser_service.dart';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+/// True while the KI-Import bottom sheet is visible.
+final importSheetOpenProvider = StateProvider<bool>((ref) => false);
+
 void showImportChatSheet(BuildContext context) {
+  final container = ProviderScope.containerOf(context);
+  container.read(importSheetOpenProvider.notifier).state = true;
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (_) => const ImportChatSheet(),
+  ).whenComplete(
+    () => container.read(importSheetOpenProvider.notifier).state = false,
   );
 }
 
@@ -30,7 +39,9 @@ void showImportChatSheet(BuildContext context) {
 class _ResultControllers {
   _ResultControllers(ParsedAsset a)
       : bank = TextEditingController(text: a.bankOrBroker ?? ''),
-        label = TextEditingController(text: a.label ?? ''),
+        label = TextEditingController(text: a.coinName ?? a.label ?? ''),
+        ticker = TextEditingController(
+            text: a.matchedEtf?.ticker ?? a.ticker ?? ''),
         amount = TextEditingController(
             text: a.primaryAmount != null
                 ? a.primaryAmount!.toStringAsFixed(2)
@@ -46,6 +57,7 @@ class _ResultControllers {
 
   final TextEditingController bank;
   final TextEditingController label;
+  final TextEditingController ticker;
   final TextEditingController amount;
   final TextEditingController rate;
   final TextEditingController months;
@@ -59,6 +71,7 @@ class _ResultControllers {
   void dispose() {
     bank.dispose();
     label.dispose();
+    ticker.dispose();
     amount.dispose();
     rate.dispose();
     months.dispose();
@@ -77,13 +90,13 @@ class ImportChatSheet extends ConsumerStatefulWidget {
 
 class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
   final _hintController = TextEditingController();
-  final _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
   final _picker = ImagePicker();
 
   List<XFile> _images = [];
   List<ParsedAsset> _results = [];
   List<_ResultControllers> _controllers = [];
   bool _isAnalyzing = false;
+  bool _isSavingAll = false;
   final Set<int> _savedIndices = {};
   final Set<int> _savingIndices = {};
   final Set<int> _discardedIndices = {};
@@ -91,7 +104,6 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
   @override
   void dispose() {
     _hintController.dispose();
-    _textRecognizer.close();
     _disposeControllers();
     super.dispose();
   }
@@ -124,19 +136,27 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
     _disposeControllers();
 
     try {
-      final texts = <String>[];
-      for (final img in _images) {
-        final input = InputImage.fromFilePath(img.path);
-        final recognized = await _textRecognizer.processImage(input);
-        texts.add(recognized.text);
-      }
-
       final hint = _hintController.text.trim();
-      final parsed = FinancialParser.parseAll(texts, hint.isEmpty ? null : hint);
+      final parsed = await GeminiParserService.parseImages(
+        _images,
+        hint.isEmpty ? null : hint,
+      );
 
+      final controllers = parsed.map(_ResultControllers.new).toList();
+      // Single-image: sync bank name across all cards when user edits the first one
+      if (_images.length == 1 && controllers.length > 1) {
+        controllers.first.bank.addListener(() {
+          final name = controllers.first.bank.text;
+          for (final c in controllers.skip(1)) {
+            if (c.bank.text != name) {
+              c.bank.value = controllers.first.bank.value;
+            }
+          }
+        });
+      }
       setState(() {
         _results = parsed;
-        _controllers = parsed.map(_ResultControllers.new).toList();
+        _controllers = controllers;
         _isAnalyzing = false;
       });
     } catch (e) {
@@ -159,6 +179,11 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
         _savedIndices.add(index);
         _savingIndices.remove(index);
       });
+      // Close sheet when every non-discarded card is saved
+      final allDone = List.generate(_results.length, (i) => i).every(
+        (i) => _savedIndices.contains(i) || _discardedIndices.contains(i),
+      );
+      if (allDone && mounted) Navigator.of(context).pop();
     } catch (e) {
       setState(() => _savingIndices.remove(index));
       if (mounted) {
@@ -166,6 +191,142 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
           SnackBar(content: Text('Speichern fehlgeschlagen: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _saveAll() async {
+    final pending = List.generate(_results.length, (i) => i)
+        .where((i) => !_savedIndices.contains(i) && !_discardedIndices.contains(i))
+        .toList();
+    if (pending.isEmpty) return;
+
+    setState(() => _isSavingAll = true);
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      final now = DateTime.now();
+
+      for (final i in pending) {
+        _addToBatch(batch, i, now);
+      }
+
+      await batch.commit();
+      setState(() => _savedIndices.addAll(pending));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSavingAll = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Speichern fehlgeschlagen: $e')),
+      );
+      return;
+    }
+
+    setState(() => _isSavingAll = false);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${pending.length} Einträge gespeichert')),
+    );
+    Navigator.of(context).pop();
+  }
+
+  /// Builds the Firestore document for card [index] and adds it to [batch].
+  void _addToBatch(WriteBatch batch, int index, DateTime now) {
+    final ctrl = _controllers[index];
+    final asset = _results[index];
+    final type = asset.type == ParsedAssetType.unknown
+        ? ParsedAssetType.giro
+        : asset.type;
+
+    switch (type) {
+      case ParsedAssetType.giro:
+        ref.read(giroRepositoryProvider).prepareBatchAdd(
+              batch,
+              GiroAccount(
+                id: '',
+                bankName: ctrl.bank.text.trim().isNotEmpty
+                    ? ctrl.bank.text.trim()
+                    : 'Unbekannte Bank',
+                accountLabel: ctrl.label.text.trim().isNotEmpty
+                    ? ctrl.label.text.trim()
+                    : 'Girokonto',
+                balance: _parseNum(ctrl.amount.text),
+                currency: 'EUR',
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+
+      case ParsedAssetType.festgeld:
+        final amount = _parseNum(ctrl.amount.text);
+        final rate = _parseNum(ctrl.rate.text);
+        final dur = int.tryParse(ctrl.months.text.trim()) ?? 12;
+        final end = _parseDate(ctrl.endDate.text) ??
+            DateTime(now.year, now.month + dur, now.day);
+        ref.read(festgeldRepositoryProvider).prepareBatchAdd(
+              batch,
+              Festgeld(
+                id: '',
+                bankName: ctrl.bank.text.trim().isNotEmpty
+                    ? ctrl.bank.text.trim()
+                    : 'Unbekannte Bank',
+                amount: amount,
+                interestRate: rate,
+                startDate: now,
+                durationMonths: dur,
+                endDate: end,
+                projectedPayout: amount + amount * (rate / 100) * (dur / 12),
+                createdAt: now,
+              ),
+            );
+
+      case ParsedAssetType.etf:
+        final shares = asset.shares ?? 0;
+        final currentPrice = asset.currentPrice ?? 0;
+        final buyPrice = asset.purchaseValue != null && shares > 0
+            ? asset.purchaseValue! / shares
+            : currentPrice;
+        ref.read(etfRepositoryProvider).prepareBatchAdd(
+              batch,
+              EtfPosition(
+                id: '',
+                broker: ctrl.bank.text.trim(),
+                name: asset.matchedEtf?.name ?? ctrl.ticker.text.trim(),
+                ticker: ctrl.ticker.text.trim().isNotEmpty
+                    ? ctrl.ticker.text.trim()
+                    : null,
+                shares: shares,
+                buyPrice: buyPrice,
+                currentPrice: currentPrice,
+                assetType: asset.matchedEtf?.type ?? 'ETF',
+                createdAt: now,
+              ),
+            );
+
+      case ParsedAssetType.crypto:
+        final shares = asset.shares ?? 0;
+        final currentPrice = asset.currentPrice ?? 0;
+        final buyPrice = asset.purchaseValue != null && shares > 0
+            ? asset.purchaseValue! / shares
+            : currentPrice;
+        ref.read(cryptoRepositoryProvider).prepareBatchAdd(
+              batch,
+              CryptoPosition(
+                id: '',
+                exchange: ctrl.bank.text.trim().isNotEmpty
+                    ? ctrl.bank.text.trim()
+                    : 'Unbekannte Exchange',
+                coinName: ctrl.label.text.trim().isNotEmpty
+                    ? ctrl.label.text.trim()
+                    : ctrl.ticker.text.trim(),
+                coinSymbol: ctrl.ticker.text.trim().toUpperCase(),
+                amount: shares,
+                buyPrice: buyPrice,
+                currentPrice: currentPrice,
+                createdAt: now,
+              ),
+            );
+
+      case ParsedAssetType.unknown:
+        break; // skip unknown types
     }
   }
 
@@ -214,7 +375,51 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
         ));
 
       case ParsedAssetType.etf:
+        final repo = ref.read(etfRepositoryProvider);
+        final shares = _results[index].shares ?? 0;
+        final currentPrice = _results[index].currentPrice ?? 0;
+        final buyPrice = _results[index].purchaseValue != null && shares > 0
+            ? _results[index].purchaseValue! / shares
+            : currentPrice;
+        await repo.add(EtfPosition(
+          id: '',
+          broker: ctrl.bank.text.trim(),
+          name: _results[index].matchedEtf?.name ?? ctrl.ticker.text.trim(),
+          ticker: ctrl.ticker.text.trim().isNotEmpty
+              ? ctrl.ticker.text.trim()
+              : null,
+          shares: shares,
+          buyPrice: buyPrice,
+          currentPrice: currentPrice,
+          assetType: _results[index].matchedEtf?.type ?? 'ETF',
+          createdAt: now,
+        ));
+
       case ParsedAssetType.crypto:
+        final repo = ref.read(cryptoRepositoryProvider);
+        final asset = _results[index];
+        final shares = asset.shares ?? 0;
+        final currentPrice = asset.currentPrice ?? 0;
+        final buyPrice = asset.purchaseValue != null && shares > 0
+            ? asset.purchaseValue! / shares
+            : currentPrice;
+        await repo.add(CryptoPosition(
+          id: '',
+          exchange: ctrl.bank.text.trim().isNotEmpty
+              ? ctrl.bank.text.trim()
+              : 'Unbekannte Exchange',
+          coinName: ctrl.label.text.trim().isNotEmpty
+              ? ctrl.label.text.trim()
+              : (ctrl.ticker.text.trim().isNotEmpty
+                  ? ctrl.ticker.text.trim()
+                  : 'Unbekannt'),
+          coinSymbol: ctrl.ticker.text.trim().toUpperCase(),
+          amount: shares,
+          buyPrice: buyPrice,
+          currentPrice: currentPrice,
+          createdAt: now,
+        ));
+
       case ParsedAssetType.unknown:
         throw UnsupportedError('Bitte manuell hinzufügen.');
     }
@@ -327,6 +532,48 @@ class _ImportChatSheetState extends ConsumerState<ImportChatSheet> {
                               delay: Duration(milliseconds: i * 80),
                               duration: 300.ms);
                     }),
+                    // ── Save All button
+                    if (_results.any((r) =>
+                        !_savedIndices.contains(_results.indexOf(r)) &&
+                        !_discardedIndices.contains(_results.indexOf(r)))) ...[
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton.icon(
+                          onPressed: _isSavingAll ? null : _saveAll,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4CAF82),
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor:
+                                const Color(0xFF4CAF82).withValues(alpha: 0.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 0,
+                          ),
+                          icon: _isSavingAll
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.check_circle_outline,
+                                  size: 22),
+                          label: Text(
+                            _isSavingAll ? 'Wird gespeichert…' : 'Alle speichern',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                   ],
                 ],
               ),
@@ -425,7 +672,7 @@ class _ImageSection extends StatelessWidget {
                 ),
               ),
               ...images.asMap().entries.map((e) => _Thumbnail(
-                    file: File(e.value.path),
+                    xfile: e.value,
                     onRemove: () => onRemove(e.key),
                   )),
             ],
@@ -437,25 +684,33 @@ class _ImageSection extends StatelessWidget {
 }
 
 class _Thumbnail extends StatelessWidget {
-  const _Thumbnail({required this.file, required this.onRemove});
-  final File file;
+  const _Thumbnail({required this.xfile, required this.onRemove});
+  final XFile xfile;
   final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Container(
-          width: 80,
-          height: 80,
-          margin: const EdgeInsets.only(right: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            image: DecorationImage(
-              image: FileImage(file),
-              fit: BoxFit.cover,
-            ),
-          ),
+        FutureBuilder<Uint8List>(
+          future: xfile.readAsBytes(),
+          builder: (context, snapshot) {
+            return Container(
+              width: 80,
+              height: 80,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                image: snapshot.hasData
+                    ? DecorationImage(
+                        image: MemoryImage(snapshot.data!),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+                color: snapshot.hasData ? null : Colors.grey.shade300,
+              ),
+            );
+          },
         ),
         Positioned(
           top: 2,
@@ -610,14 +865,25 @@ class _SectionHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Text(
-          '– Werte prüfen & anpassen',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: AppColors.textSecondary(context)),
+        Flexible(
+          child: Text(
+            '– Werte prüfen & anpassen',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: AppColors.textSecondary(context)),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
   }
+}
+
+/// Formats a currency amount with enough decimals to avoid showing identical
+/// values for current price vs Kaufwert: ≥10 → 2 dp, ≥1 → 3 dp, <1 → 4 dp.
+String _fmtAmount(double v) {
+  if (v >= 10) return v.toStringAsFixed(2);
+  if (v >= 1) return v.toStringAsFixed(3);
+  return v.toStringAsFixed(4);
 }
 
 // ── Editable result card ──────────────────────────────────────────────────────
@@ -677,23 +943,29 @@ class _EditableResultCardState extends State<_EditableResultCard> {
         : widget.asset.type;
   }
 
-  bool get _canAutoSave =>
-      _type == ParsedAssetType.giro || _type == ParsedAssetType.festgeld;
+  bool get _canAutoSave {
+    if (_type == ParsedAssetType.giro || _type == ParsedAssetType.festgeld) {
+      return true;
+    }
+    if (_type == ParsedAssetType.etf) {
+      return widget.ctrl.ticker.text.isNotEmpty &&
+          widget.asset.shares != null &&
+          widget.asset.currentPrice != null;
+    }
+    if (_type == ParsedAssetType.crypto) {
+      return widget.ctrl.ticker.text.isNotEmpty &&
+          widget.asset.shares != null;
+    }
+    return false;
+  }
 
   void _handleSave() {
     if (!_formKey.currentState!.validate()) return;
     widget.onSave(_type);
   }
 
-  Color _confidenceColor(double v) {
-    if (v >= 0.7) return const Color(0xFF4CAF82);
-    if (v >= 0.4) return const Color(0xFFFFB347);
-    return const Color(0xFFFF6B6B);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final gradient = _typeGradients[_type]!;
     final icon = _typeIcons[_type]!;
     final isSaved = widget.isSaved;
@@ -814,6 +1086,7 @@ class _EditableResultCardState extends State<_EditableResultCard> {
                         validator: (v) =>
                             (v == null || v.trim().isEmpty) ? 'Pflichtfeld' : null,
                       ),
+                      const SizedBox(height: 10),
                     ],
 
                     // ── Festgeld fields
@@ -868,53 +1141,250 @@ class _EditableResultCardState extends State<_EditableResultCard> {
                         hint: '31.12.2026',
                         keyboard: TextInputType.datetime,
                       ),
+                      const SizedBox(height: 10),
                     ],
 
-                    // ── ETF / Crypto: manual note
-                    if (_type == ParsedAssetType.etf ||
-                        _type == ParsedAssetType.crypto) ...[
+                    // ── ETF: ticker field + detected data
+                    if (_type == ParsedAssetType.etf) ...[
+                      _InputField(
+                        label: 'Ticker / ISIN',
+                        controller: widget.ctrl.ticker,
+                        enabled: !isSaved,
+                        hint: 'z.B. EUNL.DE',
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Pflichtfeld' : null,
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+
+                    // ── ETF: show detected fund name / shares / purchase value
+                    if (_type == ParsedAssetType.etf &&
+                        (widget.asset.ticker != null ||
+                            widget.asset.shares != null)) ...[
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.warning(context)
-                              .withValues(alpha: 0.10),
+                          color: AppColors.surface(context),
                           borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border(context)),
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.info_outline,
-                                size: 16,
-                                color: AppColors.warning(context)),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _type == ParsedAssetType.etf
-                                    ? 'ETF/Aktien benötigen Ticker & Stückzahl. Bitte manuell unter "ETF & Aktien" hinzufügen.'
-                                    : 'Krypto benötigt Coin & Menge. Bitte manuell unter "Krypto" hinzufügen.',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.warning(context)),
+                            if (widget.asset.ticker != null)
+                              Text(
+                                widget.asset.ticker!,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
                               ),
-                            ),
+                            if (widget.asset.shares != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '${widget.asset.shares} Stück'
+                                '${widget.asset.currentPrice != null ? ' · ${widget.asset.currentPrice!.toStringAsFixed(4)} EUR' : ''}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                        color: AppColors.textSecondary(context)),
+                              ),
+                            ],
+                            if (widget.asset.purchaseValue != null) ...[
+                              const SizedBox(height: 6),
+                              const Divider(height: 1),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Kaufwert (errechnet)',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                              color: AppColors.textSecondary(
+                                                  context))),
+                                  Text(
+                                    '${_fmtAmount(widget.asset.purchaseValue!)} EUR',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                              if (widget.asset.gainPercent != null)
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Rendite (Seit Kauf)',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                                color: AppColors.textSecondary(
+                                                    context))),
+                                    Text(
+                                      '${widget.asset.gainPercent! >= 0 ? '+' : ''}${widget.asset.gainPercent!.toStringAsFixed(2)} %',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: widget.asset.gainPercent! >= 0
+                                                ? AppColors.positive(context)
+                                                : const Color(0xFFFF6B6B),
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                            ],
                           ],
                         ),
                       ),
+                      const SizedBox(height: 10),
                     ],
 
-                    const SizedBox(height: 16),
+                    // ── Crypto: detected coin data (read-only info box)
+                    if (_type == ParsedAssetType.crypto &&
+                        (widget.asset.shares != null ||
+                            widget.asset.primaryAmount != null)) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface(context),
+                          borderRadius: BorderRadius.circular(10),
+                          border:
+                              Border.all(color: AppColors.border(context)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (widget.asset.shares != null)
+                              Text(
+                                '${widget.asset.shares} ${widget.asset.ticker ?? ''}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                            if (widget.asset.primaryAmount != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '${widget.asset.primaryAmount!.toStringAsFixed(2)} EUR',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                        color:
+                                            AppColors.textSecondary(context)),
+                              ),
+                            ],
+                            if (widget.asset.gainPercent != null) ...[
+                              const SizedBox(height: 6),
+                              const Divider(height: 1),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Rendite (Seit Kauf)',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                              color: AppColors.textSecondary(
+                                                  context))),
+                                  Text(
+                                    '${widget.asset.gainPercent! >= 0 ? '+' : ''}${widget.asset.gainPercent!.toStringAsFixed(2)} %',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: widget.asset.gainPercent! >= 0
+                                              ? AppColors.positive(context)
+                                              : const Color(0xFFFF6B6B),
+                                        ),
+                                  ),
+                                ],
+                              ),
+                              if (widget.asset.purchaseValue != null)
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Kaufwert (errechnet)',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                                color: AppColors.textSecondary(
+                                                    context))),
+                                    Text(
+                                      '${_fmtAmount(widget.asset.purchaseValue!)} EUR',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
 
-                    // ── Action buttons
-                    AnimatedSwitcher(
-                      duration: 250.ms,
-                      child: isSaved
-                          ? _SavedRow(key: const ValueKey('saved'))
-                          : _ActionRow(
-                              key: const ValueKey('actions'),
-                              canSave: _canAutoSave,
-                              isSaving: widget.isSaving,
-                              onSave: _handleSave,
-                              onDiscard: widget.onDiscard,
+                    // ── ETF/Crypto warning + action buttons (react to ticker edits)
+                    ListenableBuilder(
+                      listenable: widget.ctrl.ticker,
+                      builder: (context, _) => Column(
+                        children: [
+                          if (_type == ParsedAssetType.etf && !_canAutoSave) ...[
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.warning(context)
+                                    .withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.info_outline,
+                                      size: 16,
+                                      color: AppColors.warning(context)),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Ticker eingeben um direkt zu speichern.',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.warning(context)),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
+                            const SizedBox(height: 16),
+                          ],
+                          AnimatedSwitcher(
+                            duration: 250.ms,
+                            child: isSaved
+                                ? _SavedRow(key: const ValueKey('saved'))
+                                : _ActionRow(
+                                    key: const ValueKey('actions'),
+                                    canSave: _canAutoSave,
+                                    isSaving: widget.isSaving,
+                                    onSave: _handleSave,
+                                    onDiscard: widget.onDiscard,
+                                  ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

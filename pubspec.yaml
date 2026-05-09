@@ -58,7 +58,6 @@ dependencies:
 
   # Screenshot AI import
   image_picker: ^1.1.2
-  google_mlkit_text_recognition: ^0.13.1
 
   # Open system settings pages
   app_settings: ^5.1.1

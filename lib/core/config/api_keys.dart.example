@@ -1,0 +1,7 @@
+/// Copy this file to api_keys.dart and fill in your keys.
+library;
+
+class ApiKeys {
+  /// Get a free key at https://aistudio.google.com
+  static const gemini = 'YOUR_GEMINI_API_KEY';
+}

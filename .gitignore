@@ -53,3 +53,6 @@ android/app/fintrack-release.jks
 
 # Firebase local cache
 .firebase/
+
+# Local API keys (never commit)
+lib/core/config/api_keys.dart

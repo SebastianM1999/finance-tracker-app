@@ -362,7 +362,12 @@ class _CryptoLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = imageUrl ??
+    final knownUrl = imageUrl ??
+        KnownAssets.cryptos
+            .where((c) => c.symbol.toLowerCase() == symbol.toLowerCase())
+            .firstOrNull
+            ?.imageUrl;
+    final url = knownUrl ??
         'https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol.toLowerCase()}.png';
     return CachedNetworkImage(
       imageUrl: url,

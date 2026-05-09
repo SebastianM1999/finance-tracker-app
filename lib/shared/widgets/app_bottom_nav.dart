@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../features/gamification/providers/gamification_providers.dart';
 import '../../features/gamification/widgets/avatar_leading.dart';
+import '../../features/screenshot_import/widgets/import_chat_sheet.dart';
 
 class AppScaffold extends ConsumerWidget {
   const AppScaffold({super.key, required this.navigationShell});
@@ -22,6 +23,7 @@ class AppScaffold extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final homeTabBadgeCount = ref.watch(homeTabBadgeCountProvider);
+    final importSheetOpen = ref.watch(importSheetOpenProvider);
     final topPadding = MediaQuery.viewPaddingOf(context).top;
     final router = GoRouter.of(context);
 
@@ -36,25 +38,24 @@ class AppScaffold extends ConsumerWidget {
         body: Stack(
           children: [
             navigationShell,
-            // Avatar only shown on root tabs — not on sub-pages with back arrows.
-            // ListenableBuilder on routerDelegate ensures this re-evaluates on
-            // every push AND pop, not just on forward navigation.
-            ListenableBuilder(
-              listenable: router.routerDelegate,
-              builder: (_, __) {
-                final location =
-                    router.routerDelegate.currentConfiguration.uri.path;
-                if (!_rootTabRoutes.contains(location)) {
-                  return const SizedBox.shrink();
-                }
-                return Positioned(
-                  top: topPadding,
-                  left: 0,
-                  height: 60,
-                  child: const AvatarLeading(),
-                );
-              },
-            ),
+            // Avatar — hidden while the KI-Import sheet is open
+            if (!importSheetOpen)
+              ListenableBuilder(
+                listenable: router.routerDelegate,
+                builder: (_, __) {
+                  final location =
+                      router.routerDelegate.currentConfiguration.uri.path;
+                  if (!_rootTabRoutes.contains(location)) {
+                    return const SizedBox.shrink();
+                  }
+                  return Positioned(
+                    top: topPadding,
+                    left: 0,
+                    height: 60,
+                    child: const AvatarLeading(),
+                  );
+                },
+              ),
           ],
         ),
         bottomNavigationBar: AppBottomNav(

@@ -18,6 +18,10 @@ class CryptoRepository {
       .map((s) => s.docs.map(CryptoPosition.fromFirestore).toList());
 
   Future<DocumentReference> add(CryptoPosition p) => _col.add(p.toFirestore());
+
+  void prepareBatchAdd(WriteBatch batch, CryptoPosition p) =>
+      batch.set(_col.doc(), p.toFirestore());
+
   Future<void> update(CryptoPosition p) => _col.doc(p.id).update(p.toFirestore());
   Future<void> delete(String id) => _col.doc(id).delete();
 }
