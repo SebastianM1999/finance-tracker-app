@@ -16,7 +16,6 @@ class AppScaffold extends ConsumerWidget {
     AppRoutes.investments,
     AppRoutes.accounts,
     AppRoutes.debts,
-    AppRoutes.analyse,
     AppRoutes.chipRadar,
   };
 
@@ -126,11 +125,6 @@ class AppBottomNav extends StatelessWidget {
             icon: Icon(Icons.balance_outlined),
             activeIcon: Icon(Icons.balance),
             label: 'Schulden',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.query_stats_outlined),
-            activeIcon: Icon(Icons.query_stats),
-            label: 'Analyse',
           ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.radar_outlined),

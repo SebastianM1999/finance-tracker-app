@@ -19,6 +19,44 @@ const STOCKPRICES_BASE = "https://stockprices.dev/api";
 const COINGECKO_SEARCH = "https://api.coingecko.com/api/v3/search";
 const COINGECKO_PRICE = "https://api.coingecko.com/api/v3/simple/price";
 
+const COINGECKO_IDS_BY_SYMBOL = {
+  BTC: "bitcoin",
+  ETH: "ethereum",
+  BNB: "binancecoin",
+  SOL: "solana",
+  XRP: "ripple",
+  ADA: "cardano",
+  AVAX: "avalanche-2",
+  DOGE: "dogecoin",
+  DOT: "polkadot",
+  LINK: "chainlink",
+  MATIC: "matic-network",
+  SHIB: "shiba-inu",
+  LTC: "litecoin",
+  BCH: "bitcoin-cash",
+  ATOM: "cosmos",
+  XLM: "stellar",
+  NEAR: "near",
+  UNI: "uniswap",
+  AAVE: "aave",
+  ETC: "ethereum-classic",
+  VET: "vechain",
+  FIL: "filecoin",
+  ICP: "internet-computer",
+  HBAR: "hedera-hashgraph",
+  TRX: "tron",
+  APT: "aptos",
+  ALGO: "algorand",
+  INJ: "injective-protocol",
+  SEI: "sei-network",
+  RNDR: "render-token",
+  CRO: "cronos",
+};
+
+function noPrice(res, error = "Price not found") {
+  return res.json({ price: null, source: null, error });
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 // Cache EUR rate within a single function invocation to avoid redundant calls
@@ -32,9 +70,25 @@ async function usdToEur() {
   } catch { return null; }
 }
 
-// CoinGecko fallback: search for coin by symbol, then fetch EUR price
+async function coingeckoPriceById(id) {
+  try {
+    const priceRes = await axios.get(`${COINGECKO_PRICE}?ids=${id}&vs_currencies=eur`, {
+      headers: { Accept: "application/json" }, timeout: 8000,
+    });
+    const price = priceRes.data?.[id]?.eur;
+    return price != null ? { price, source: "CoinGecko" } : null;
+  } catch { return null; }
+}
+
+// CoinGecko fallback: prefer stable IDs to avoid search throttling/ambiguity.
 async function coingeckoPrice(symbol) {
   try {
+    const mappedId = COINGECKO_IDS_BY_SYMBOL[symbol.toUpperCase()];
+    if (mappedId) {
+      const mappedResult = await coingeckoPriceById(mappedId);
+      if (mappedResult) return mappedResult;
+    }
+
     const searchRes = await axios.get(`${COINGECKO_SEARCH}?query=${encodeURIComponent(symbol)}`, {
       headers: { Accept: "application/json" }, timeout: 8000,
     });
@@ -43,12 +97,12 @@ async function coingeckoPrice(symbol) {
     const coin = coins.find((c) => c.symbol?.toUpperCase() === symbol.toUpperCase());
     if (!coin?.id) return null;
 
-    const priceRes = await axios.get(`${COINGECKO_PRICE}?ids=${coin.id}&vs_currencies=eur`, {
-      headers: { Accept: "application/json" }, timeout: 8000,
-    });
-    const price = priceRes.data?.[coin.id]?.eur;
-    return price != null ? { price, source: "CoinGecko" } : null;
+    return coingeckoPriceById(coin.id);
   } catch { return null; }
+}
+
+async function yahooCryptoPrice(symbol) {
+  return yahooPrice(`${symbol}-EUR`);
 }
 
 async function binancePrice(symbol) {
@@ -377,11 +431,14 @@ exports.fetchPrice = onRequest(
           if (rate) return res.json({ price: usdtPrice * rate, source: "Binance" });
         }
 
+        const yahooResult = await yahooCryptoPrice(sym);
+        if (yahooResult) return res.json(yahooResult);
+
         // Fallback: CoinGecko (covers coins not listed on Binance)
         const cgResult = await coingeckoPrice(sym);
         if (cgResult) return res.json(cgResult);
 
-        return res.status(404).json({ error: "Price not found" });
+        return noPrice(res);
       }
 
       // ── Stock / ETF / Commodity ──────────────────────────────────────────────
@@ -409,7 +466,7 @@ exports.fetchPrice = onRequest(
           if (result) return res.json(result);
         }
 
-        return res.status(404).json({ error: "Price not found" });
+        return noPrice(res);
       }
 
       // ── Batch prices ─────────────────────────────────────────────────────────
@@ -556,6 +613,8 @@ async function _fetchSymbolPrice(symbol, type) {
         const rate = await usdToEur();
         if (rate) return usdtPrice * rate;
       }
+      const yahoo = await yahooCryptoPrice(symbol);
+      if (yahoo) return yahoo.price;
       const cg = await coingeckoPrice(symbol);
       return cg?.price ?? null;
     } else {

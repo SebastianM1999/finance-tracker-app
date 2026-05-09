@@ -9,7 +9,6 @@ import '../../features/analyse/screens/kategorien_detail_screen.dart';
 import '../../features/analyse/screens/rendite_detail_screen.dart';
 import '../../features/analyse/screens/risiko_detail_screen.dart';
 import '../../features/analyse/screens/top_flop_detail_screen.dart';
-import '../../features/analyse/screens/vermoegen_detail_screen.dart';
 import '../../features/auth/providers/auth_providers.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/home/screens/home_screen.dart';
@@ -31,7 +30,6 @@ class AppRoutes {
   static const settings = '/settings';
   static const verlauf = '/verlauf';
   static const analyse = '/analyse';
-  static const analyseVermoegen = '/analyse/vermoegen';
   static const analyseRendite = '/analyse/rendite';
   static const analyseRisiko = '/analyse/risiko';
   static const analyseTopFlop = '/analyse/topflop';
@@ -85,6 +83,24 @@ final routerProvider = Provider<GoRouter>((ref) {
               FadeTransition(opacity: animation, child: child),
         ),
       ),
+      GoRoute(
+        path: AppRoutes.analyse,
+        builder: (_, __) => const AnalyseScreen(),
+        routes: [
+          GoRoute(
+              path: 'rendite', builder: (_, __) => const RenditeDetailScreen()),
+          GoRoute(
+              path: 'risiko', builder: (_, __) => const RisikoDetailScreen()),
+          GoRoute(
+              path: 'topflop', builder: (_, __) => const TopFlopDetailScreen()),
+          GoRoute(
+              path: 'kategorien',
+              builder: (_, __) => const KategorienDetailScreen()),
+          GoRoute(
+              path: 'festgeld',
+              builder: (_, __) => const FestgeldDetailScreen()),
+        ],
+      ),
       StatefulShellRoute(
         builder: (context, state, navigationShell) =>
             AppScaffold(navigationShell: navigationShell),
@@ -123,22 +139,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.debts,
                 builder: (context, state) => const SchuldenScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: AppRoutes.analyse,
-                builder: (_, __) => const AnalyseScreen(),
-                routes: [
-                  GoRoute(path: 'vermoegen', builder: (_, __) => const VermoegenDetailScreen()),
-                  GoRoute(path: 'rendite',    builder: (_, __) => const RenditeDetailScreen()),
-                  GoRoute(path: 'risiko',     builder: (_, __) => const RisikoDetailScreen()),
-                  GoRoute(path: 'topflop',    builder: (_, __) => const TopFlopDetailScreen()),
-                  GoRoute(path: 'kategorien', builder: (_, __) => const KategorienDetailScreen()),
-                  GoRoute(path: 'festgeld',   builder: (_, __) => const FestgeldDetailScreen()),
-                ],
               ),
             ],
           ),

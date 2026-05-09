@@ -8,6 +8,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../shared/widgets/update_icon_button.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../festgeld/models/festgeld.dart';
 import '../../gamification/utils/gamification_trigger.dart';
@@ -23,6 +24,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _startupTriggered = false;
+  bool _refreshing = false;
 
   @override
   void initState() {
@@ -36,30 +38,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _refresh(BuildContext context) async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+
     final cryptoList = ref.read(cryptoStreamProvider).valueOrNull ?? [];
     final etfList = ref.read(etfStreamProvider).valueOrNull ?? [];
     final assetsList = ref.read(assetsStreamProvider).valueOrNull ?? [];
 
-    final updated = await ref.read(priceRefreshServiceProvider).refreshAll(
-          cryptoList: cryptoList,
-          etfList: etfList,
-          assetsList: assetsList,
-        );
+    try {
+      final updated = await ref.read(priceRefreshServiceProvider).refreshAll(
+            cryptoList: cryptoList,
+            etfList: etfList,
+            assetsList: assetsList,
+          );
 
-    ref.invalidate(giroStreamProvider);
-    ref.invalidate(festgeldStreamProvider);
-    ref.invalidate(schuldenStreamProvider);
-    ref.invalidate(netWorthHistoryProvider);
+      ref.invalidate(giroStreamProvider);
+      ref.invalidate(festgeldStreamProvider);
+      ref.invalidate(schuldenStreamProvider);
+      ref.invalidate(netWorthHistoryProvider);
 
-    if (context.mounted && updated > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('$updated Kurse aktualisiert'),
-        duration: const Duration(seconds: 3),
-      ));
-    }
+      if (context.mounted && updated > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$updated Kurse aktualisiert'),
+          duration: const Duration(seconds: 3),
+        ));
+      }
 
-    if (context.mounted) {
-      await triggerGamificationOnRefresh(context, ref);
+      if (context.mounted) {
+        await triggerGamificationOnRefresh(context, ref);
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
     }
   }
 
@@ -91,6 +100,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       style: theme.textTheme.bodyMedium),
                 ],
               ),
+              actions: [
+                UpdateIconButton(
+                  isLoading: _refreshing,
+                  onPressed: () => _refresh(context),
+                ),
+                const SizedBox(width: 8),
+              ],
             ),
             SliverToBoxAdapter(
               child: Padding(
@@ -789,4 +805,3 @@ class _MaturityCard extends ConsumerWidget {
     );
   }
 }
-

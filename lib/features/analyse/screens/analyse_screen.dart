@@ -19,8 +19,6 @@ class AnalyseScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Analyse'),
         centerTitle: false,
-        leading: const SizedBox.shrink(),
-        leadingWidth: 52,
       ),
       body: isPro ? const _AnalyseHub() : const AnalysePaywall(),
     );
@@ -31,13 +29,6 @@ class _AnalyseHub extends StatelessWidget {
   const _AnalyseHub();
 
   static const _features = [
-    (
-      Icons.show_chart,
-      AppColors.chartGiro,
-      'Vermögensentwicklung',
-      'Dein Nettovermögen über Zeit',
-      AppRoutes.analyseVermoegen,
-    ),
     (
       Icons.percent,
       AppColors.chartEtf,
@@ -89,7 +80,7 @@ class _AnalyseHub extends StatelessWidget {
           color: color,
           title: title,
           description: description,
-          onTap: () => context.go(route),
+          onTap: () => context.push(route),
         );
       },
     );

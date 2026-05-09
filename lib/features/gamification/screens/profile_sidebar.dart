@@ -22,12 +22,13 @@ Future<void> showProfileSidebar(BuildContext context) => showGeneralDialog(
       context: context,
       barrierDismissible: true,
       barrierLabel: '',
-      barrierColor: Theme.of(context).brightness == Brightness.dark ? Colors.black54 : Colors.black12,
+      barrierColor: Theme.of(context).brightness == Brightness.dark
+          ? Colors.black54
+          : Colors.black12,
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (ctx, anim, _) => const _ProfileSidebarPage(),
       transitionBuilder: (ctx, anim, _, child) {
-        final curved =
-            CurvedAnimation(parent: anim, curve: Curves.easeOut);
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOut);
         return SlideTransition(
           position: Tween<Offset>(
             begin: const Offset(-1, 0),
@@ -80,7 +81,8 @@ class _ProfileSidebarPage extends ConsumerWidget {
                 Align(
                   alignment: Alignment.topRight,
                   child: IconButton(
-                    icon: Icon(Icons.close, color: onSurface.withValues(alpha: 0.54)),
+                    icon: Icon(Icons.close,
+                        color: onSurface.withValues(alpha: 0.54)),
                     onPressed: () => Navigator.of(context).pop(),
                     padding: const EdgeInsets.all(8),
                     constraints: const BoxConstraints(),
@@ -140,153 +142,163 @@ class _ProfileSidebarPage extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Group: Errungenschaften
+                        const _SectionHeader(label: 'Errungenschaften'),
+                        _MenuItem(
+                          icon: Icons.military_tech_outlined,
+                          title: 'Meine Badges',
+                          trailing: '$unlockedCount/26',
+                          badgeCount: newBadgeCount,
+                          onTap: () {
+                            ref.read(newBadgeCountProvider.notifier).clear();
+                            Navigator.of(context).pop();
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => DraggableScrollableSheet(
+                                initialChildSize: 0.92,
+                                minChildSize: 0.5,
+                                maxChildSize: 0.95,
+                                builder: (_, ctrl) => const BadgeGridScreen(),
+                              ),
+                            );
+                          },
+                        ),
 
-                // Group: Errungenschaften
-                const _SectionHeader(label: 'Errungenschaften'),
-                _MenuItem(
-                  icon: Icons.military_tech_outlined,
-                  title: 'Meine Badges',
-                  trailing: '$unlockedCount/26',
-                  badgeCount: newBadgeCount,
-                  onTap: () {
-                    ref.read(newBadgeCountProvider.notifier).clear();
-                    Navigator.of(context).pop();
-                    showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => DraggableScrollableSheet(
-                        initialChildSize: 0.92,
-                        minChildSize: 0.5,
-                        maxChildSize: 0.95,
-                        builder: (_, ctrl) => const BadgeGridScreen(),
-                      ),
-                    );
-                  },
-                ),
+                        Divider(
+                            color: outline.withValues(alpha: 0.35), height: 1),
 
-                Divider(color: outline.withValues(alpha: 0.35), height: 1),
+                        // Group: Finance stats
+                        const _SectionHeader(label: 'Statistiken'),
+                        _MenuItem(
+                          icon: Icons.show_chart_outlined,
+                          title: 'Vermögensentwicklung',
+                          trailing: null,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            context.push(AppRoutes.verlauf);
+                          },
+                        ),
+                        _MenuItem(
+                          icon: Icons.bar_chart_outlined,
+                          title: 'Meine Statistiken',
+                          trailing: null,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => DraggableScrollableSheet(
+                                initialChildSize: 0.92,
+                                minChildSize: 0.5,
+                                maxChildSize: 0.95,
+                                builder: (_, ctrl) => const StatsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _MenuItem(
+                          icon: Icons.query_stats_outlined,
+                          title: 'Analyse',
+                          trailing: null,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            context.push(AppRoutes.analyse);
+                          },
+                        ),
 
-                // Group: Finance stats
-                const _SectionHeader(label: 'Statistiken'),
-                _MenuItem(
-                  icon: Icons.show_chart_outlined,
-                  title: 'Vermögensentwicklung',
-                  trailing: null,
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    context.push(AppRoutes.verlauf);
-                  },
-                ),
-                _MenuItem(
-                  icon: Icons.bar_chart_outlined,
-                  title: 'Meine Statistiken',
-                  trailing: null,
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => DraggableScrollableSheet(
-                        initialChildSize: 0.92,
-                        minChildSize: 0.5,
-                        maxChildSize: 0.95,
-                        builder: (_, ctrl) => const StatsScreen(),
-                      ),
-                    );
-                  },
-                ),
+                        Divider(
+                            color: outline.withValues(alpha: 0.35), height: 1),
 
-                Divider(color: outline.withValues(alpha: 0.35), height: 1),
+                        // Group: Tools
+                        const _SectionHeader(label: 'Werkzeuge'),
+                        _MenuItem(
+                          icon: Icons.calculate_outlined,
+                          title: 'Zinsrechner',
+                          trailing: null,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => DraggableScrollableSheet(
+                                initialChildSize: 0.92,
+                                minChildSize: 0.5,
+                                maxChildSize: 0.95,
+                                builder: (_, ctrl) =>
+                                    ZinsrechnerScreen(scrollController: ctrl),
+                              ),
+                            );
+                          },
+                        ),
+                        _MenuItem(
+                          icon: Icons.trending_up_outlined,
+                          title: 'Sparrechner',
+                          trailing: null,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => DraggableScrollableSheet(
+                                initialChildSize: 0.92,
+                                minChildSize: 0.5,
+                                maxChildSize: 0.95,
+                                builder: (_, ctrl) =>
+                                    SparrechnerScreen(scrollController: ctrl),
+                              ),
+                            );
+                          },
+                        ),
 
-                // Group: Tools
-                const _SectionHeader(label: 'Werkzeuge'),
-                _MenuItem(
-                  icon: Icons.calculate_outlined,
-                  title: 'Zinsrechner',
-                  trailing: null,
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => DraggableScrollableSheet(
-                        initialChildSize: 0.92,
-                        minChildSize: 0.5,
-                        maxChildSize: 0.95,
-                        builder: (_, ctrl) =>
-                            ZinsrechnerScreen(scrollController: ctrl),
-                      ),
-                    );
-                  },
-                ),
-                _MenuItem(
-                  icon: Icons.trending_up_outlined,
-                  title: 'Sparrechner',
-                  trailing: null,
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => DraggableScrollableSheet(
-                        initialChildSize: 0.92,
-                        minChildSize: 0.5,
-                        maxChildSize: 0.95,
-                        builder: (_, ctrl) =>
-                            SparrechnerScreen(scrollController: ctrl),
-                      ),
-                    );
-                  },
-                ),
+                        Divider(
+                            color: outline.withValues(alpha: 0.35), height: 1),
 
-                Divider(color: outline.withValues(alpha: 0.35), height: 1),
-
-                // Group: Markt
-                const _SectionHeader(label: 'Markt'),
-                _MenuItem(
-                  icon: Icons.bar_chart_outlined,
-                  title: 'Top Performer',
-                  trailing: null,
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => DraggableScrollableSheet(
-                        initialChildSize: 0.92,
-                        minChildSize: 0.5,
-                        maxChildSize: 0.95,
-                        builder: (_, ctrl) =>
-                            MarktScreen(scrollController: ctrl),
-                      ),
-                    );
-                  },
-                ),
-                _MenuItem(
-                  icon: Icons.visibility_outlined,
-                  title: 'Watchlist',
-                  trailing: null,
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => DraggableScrollableSheet(
-                        initialChildSize: 0.92,
-                        minChildSize: 0.5,
-                        maxChildSize: 0.95,
-                        builder: (_, ctrl) => const WatchlistScreen(),
-                      ),
-                    );
-                  },
-                ),
-
+                        // Group: Markt
+                        const _SectionHeader(label: 'Markt'),
+                        _MenuItem(
+                          icon: Icons.bar_chart_outlined,
+                          title: 'Top Performer',
+                          trailing: null,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => DraggableScrollableSheet(
+                                initialChildSize: 0.92,
+                                minChildSize: 0.5,
+                                maxChildSize: 0.95,
+                                builder: (_, ctrl) =>
+                                    MarktScreen(scrollController: ctrl),
+                              ),
+                            );
+                          },
+                        ),
+                        _MenuItem(
+                          icon: Icons.visibility_outlined,
+                          title: 'Watchlist',
+                          trailing: null,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => DraggableScrollableSheet(
+                                initialChildSize: 0.92,
+                                minChildSize: 0.5,
+                                maxChildSize: 0.95,
+                                builder: (_, ctrl) => const WatchlistScreen(),
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
