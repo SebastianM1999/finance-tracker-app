@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:go_router/go_router.dart';
 
 import 'notification_service.dart';
 
@@ -12,7 +13,7 @@ class FcmService {
 
   /// Call once when a user logs in. Stores the FCM token to Firestore
   /// so the Cloud Function can send push notifications.
-  static Future<void> initializeForUser(String uid) async {
+  static Future<void> initializeForUser(String uid, GoRouter router) async {
     if (kIsWeb || _initialized) return;
     _initialized = true;
 
@@ -35,13 +36,20 @@ class FcmService {
     // Show local notification for messages received while app is in foreground
     FirebaseMessaging.onMessage.listen((message) {
       final title = message.notification?.title;
-      final body = message.notification?.body;
-      if (title != null && body != null) {
-        NotificationService.instance.showWatchlistAlertRaw(
-          title: title,
-          body: body,
-        );
+      final body  = message.notification?.body;
+      if (title == null || body == null) return;
+
+      if (message.data['route'] == '/chip-radar') {
+        NotificationService.instance.showChipRadarAlert(title: title, body: body);
+      } else {
+        NotificationService.instance.showWatchlistAlertRaw(title: title, body: body);
       }
+    });
+
+    // Navigate to the right screen when user taps a push notification
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      final route = message.data['route'] as String?;
+      if (route != null) router.go(route);
     });
   }
 

@@ -247,6 +247,114 @@ async function dailyIndex(ticker) {
   } catch { return null; }
 }
 
+// ── Wave label (batch scan — RSI proxied by ch21d) ────────────────────────────
+// ch21d correlates tightly with RSI: >75 ≈ RSI>75, >=50 ≈ RSI>=60, <50 ≈ RSI<65
+
+function _waveLabel(ch7d, ch21d) {
+  if (ch21d > 75)                       return "extended";
+  if (ch7d >= 20 && ch21d >= 50)        return "running";
+  if (ch7d >= 20 && ch21d < 50)         return "early";
+  if (ch7d < 20)                        return "watching";
+  return null;
+}
+
+// ── Technical indicator helpers ───────────────────────────────────────────────
+
+function _calcRSI14(closes) {
+  if (closes.length < 15) return null;
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= 14; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d > 0) avgGain += d; else avgLoss += Math.abs(d);
+  }
+  avgGain /= 14; avgLoss /= 14;
+  for (let i = 15; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    avgGain = (avgGain * 13 + (d > 0 ? d : 0)) / 14;
+    avgLoss = (avgLoss * 13 + (d < 0 ? Math.abs(d) : 0)) / 14;
+  }
+  if (avgLoss === 0) return 100;
+  return Math.round((100 - 100 / (1 + avgGain / avgLoss)) * 10) / 10;
+}
+
+// MACD(12,26,9): returns { macd, signal, histogram, histogramSeries (last 10) }
+// Needs at least 34 closes (26 for EMA26 + 9 for signal EMA — offset = 14 between them)
+function _calcMACD(closes) {
+  if (closes.length < 34) return null;
+
+  function ema(data, period) {
+    const k = 2 / (period + 1);
+    let val = data.slice(0, period).reduce((s, v) => s + v, 0) / period;
+    const result = [val];
+    for (let i = period; i < data.length; i++) {
+      val = data[i] * k + val * (1 - k);
+      result.push(val);
+    }
+    return result;
+  }
+
+  const ema12    = ema(closes, 12);           // length: closes.length - 11
+  const ema26    = ema(closes, 26);           // length: closes.length - 25
+  const macdLine = ema26.map((v, i) => ema12[i + 14] - v); // aligned at closes[25+]
+  const signalLine = ema(macdLine, 9);        // length: macdLine.length - 8
+
+  const r = (v) => Math.round(v * 1000) / 1000;
+
+  // Build histogram series (last 10 bars)
+  const seriesStart = Math.max(0, signalLine.length - 10);
+  const histogramSeries = [];
+  for (let i = seriesStart; i < signalLine.length; i++) {
+    histogramSeries.push(r(macdLine[i + 8] - signalLine[i]));
+  }
+
+  const macd      = r(macdLine[macdLine.length - 1]);
+  const signal    = r(signalLine[signalLine.length - 1]);
+  const histogram = histogramSeries[histogramSeries.length - 1];
+
+  return { macd, signal, histogram, histogramSeries };
+}
+
+// ── getStockDetail ────────────────────────────────────────────────────────────
+// Returns 52w high/low, RSI(14), MACD(12,26,9), analyst consensus + target price.
+
+exports.getStockDetail = onRequest(
+  { region: "us-central1", cors: true },
+  async (req, res) => {
+    const ticker = (req.query.ticker ?? "").trim().toUpperCase();
+    if (!ticker) return res.status(400).json({ error: "Missing ticker" });
+
+    const [quoteResp, chartResp] = await Promise.all([
+      axios.get(
+        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`,
+        { headers: YAHOO_HEADERS, timeout: 10000 }
+      ).catch(() => null),
+      // 90 days gives enough bars for MACD(26) + signal(9) with room to spare
+      axios.get(
+        `${YAHOO_CHART_BASE}/${ticker}?range=90d&interval=1d`,
+        { headers: YAHOO_HEADERS, timeout: 10000 }
+      ).catch(() => null),
+    ]);
+
+    const q = quoteResp?.data?.quoteResponse?.result?.[0];
+    if (!q) return res.status(502).json({ error: `No data from Yahoo for ${ticker}` });
+
+    const closes = chartResp?.data?.chart?.result?.[0]
+      ?.indicators?.quote?.[0]?.close?.filter(v => v != null) ?? [];
+
+    return res.json({
+      ticker,
+      week52High:         q.fiftyTwoWeekHigh        ?? null,
+      week52Low:          q.fiftyTwoWeekLow         ?? null,
+      targetMeanPrice:    q.targetMeanPrice         ?? null,
+      numberOfAnalysts:   q.numberOfAnalystOpinions ?? null,
+      recommendationKey:  q.recommendationKey       ?? null,
+      recommendationMean: q.recommendationMean      ?? null,
+      rsi14:              _calcRSI14(closes),
+      macd:               _calcMACD(closes),
+    });
+  }
+);
+
 // ── Cloud Function ────────────────────────────────────────────────────────────
 
 exports.fetchPrice = onRequest(
@@ -546,5 +654,198 @@ exports.watchlistAlerts = onSchedule(
     }
 
     await Promise.all([...sends, batch.commit()]);
+  }
+);
+
+// ── Surge Radar ───────────────────────────────────────────────────────────────
+//
+// Scans ALL ~8,000 US-listed stocks daily using Polygon grouped daily bars.
+// No sector filter — catches semiconductors, quantum computing, AI hardware,
+// biotech, or any other field that suddenly surges.
+// Cost: 5 API calls/day regardless of market size.
+//
+// Only stocks where at least one indicator is approaching or past a threshold
+// are written to Firestore, keeping the collection to ~100–300 docs.
+
+// Fetch grouped daily bars for a given date string "YYYY-MM-DD".
+// Retries up to 4 prior calendar days to skip weekends/holidays.
+async function _fetchGroupedBars(dateStr, apiKey) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const d = new Date(dateStr + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() - attempt);
+    const ds = d.toISOString().split("T")[0];
+    try {
+      const resp = await axios.get(
+        `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${ds}`,
+        { params: { adjusted: true, apiKey }, timeout: 30000 }
+      );
+      if ((resp.data.resultsCount ?? 0) > 0) {
+        const map = {};
+        for (const bar of resp.data.results) map[bar.T] = bar;
+        console.log(`Grouped bars ${ds}: ${Object.keys(map).length} stocks`);
+        return map;
+      }
+    } catch (e) {
+      console.warn(`Grouped bars attempt ${attempt + 1} for ${ds}: ${e.message}`);
+    }
+    if (attempt < 4) await new Promise(r => setTimeout(r, 13000));
+  }
+  return {};
+}
+
+// ── Daily scan (Mon–Fri 17:00 ET) ─────────────────────────────────────────────
+
+exports.dailyChipScan = onSchedule(
+  {
+    schedule: "0 17 * * 1-5",
+    timeZone: "America/New_York",
+    region: "us-central1",
+    timeoutSeconds: 300,
+  },
+  async () => {
+    const db = getFirestore();
+    const messaging = getMessaging();
+    const apiKey = process.env.POLYGON_API_KEY;
+    if (!apiKey) { console.error("POLYGON_API_KEY not set"); return; }
+
+    // ── 1. Collect FCM tokens (all users) ─────────────────────────────────────
+    const usersSnap = await db.collection("users").get();
+    const tokens = usersSnap.docs.map(d => d.data().fcmToken).filter(Boolean);
+
+    // ── 2. Fetch 5 grouped bar snapshots (all ~8,000 US stocks each) ──────────
+    // Calendar offsets padded to skip weekends:
+    //   offset 2  ≈ 1 trading day ago
+    //   offset 11 ≈ 7 trading days ago
+    //   offset 21 ≈ 14 trading days ago
+    //   offset 31 ≈ 21 trading days ago
+    const daysAgo = (n) => {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      return d.toISOString().split("T")[0];
+    };
+    const today = new Date().toISOString().split("T")[0];
+
+    const barsToday = await _fetchGroupedBars(today,       apiKey);
+    await new Promise(r => setTimeout(r, 13000));
+    const bars1d    = await _fetchGroupedBars(daysAgo(2),  apiKey);
+    await new Promise(r => setTimeout(r, 13000));
+    const bars7d    = await _fetchGroupedBars(daysAgo(11), apiKey);
+    await new Promise(r => setTimeout(r, 13000));
+    const bars14d   = await _fetchGroupedBars(daysAgo(21), apiKey);
+    await new Promise(r => setTimeout(r, 13000));
+    const bars21d   = await _fetchGroupedBars(daysAgo(31), apiKey);
+
+    console.log(`Processing ${Object.keys(barsToday).length} stocks`);
+
+    // ── 3. Process every stock — keep only interesting ones ───────────────────
+    const scanEntries = [];  // written to Firestore in batch
+    const newAlerts   = [];  // deduplicated, then FCM sent
+
+    for (const [ticker, b0] of Object.entries(barsToday)) {
+      // Skip penny stocks and very illiquid tickers
+      if (b0.c < 1.0 || b0.v < 10000) continue;
+
+      const b1  = bars1d[ticker];
+      const b7  = bars7d[ticker];
+      const b14 = bars14d[ticker];
+      const b21 = bars21d[ticker];
+
+      if (!b7) continue; // need at least 7d history to be useful
+
+      const ch1d  = b1  ? (b0.c - b1.c)  / b1.c  * 100 : null;
+      const ch7d  =        (b0.c - b7.c)  / b7.c  * 100;
+      const ch14d = b14 ? (b0.c - b14.c) / b14.c * 100 : null;
+      const ch21d = b21 ? (b0.c - b21.c) / b21.c * 100 : null;
+
+      // Volume ratio: today vs average of the 4 historical snapshots
+      const historicalVols = [b1, b7, b14, b21].filter(Boolean).map(b => b.v);
+      const avgVol = historicalVols.length > 0
+        ? historicalVols.reduce((s, v) => s + v, 0) / historicalVols.length
+        : 0;
+      const volR = avgVol > 0 ? b0.v / avgVol : 0;
+
+      // Only keep stocks where at least one indicator is approaching or past a threshold
+      const isInteresting =
+        (ch1d  != null && ch1d  >= 8.5) ||
+        ch7d              >= 17         ||
+        (ch14d != null && ch14d >= 34)  ||
+        (ch21d != null && ch21d >= 51)  ||
+        volR              >= 1.7;
+
+      if (isInteresting) {
+        scanEntries.push({
+          ticker,
+          data: {
+            ticker,
+            price:        b0.c,
+            change_1d:    ch1d  ?? 0,
+            change_7d:    ch7d,
+            change_14d:   ch14d ?? 0,
+            change_21d:   ch21d ?? 0,
+            volume_ratio: volR,
+            wave_label:   _waveLabel(ch7d, ch21d ?? 0),
+            last_updated: today,
+          },
+        });
+      }
+
+      // Evaluate alert triggers
+      const triggers = [];
+      if (ch1d  != null && ch1d  >= 10) triggers.push({ label: "📈 Daily spike",         val: ch1d,  win: "1d"   });
+      if (ch7d              >= 20)       triggers.push({ label: "🔥 Weekly momentum",     val: ch7d,  win: "7d"   });
+      if (ch7d              >= 35)       triggers.push({ label: "🚨 Strong weekly surge", val: ch7d,  win: "7d_s" });
+      if (ch14d != null && ch14d >= 40)  triggers.push({ label: "🚨 2-week surge",        val: ch14d, win: "14d"  });
+      if (ch21d != null && ch21d >= 60)  triggers.push({ label: "🆘 Major 3-week move",   val: ch21d, win: "21d"  });
+      if (volR              >= 2)        triggers.push({ label: "📊 Unusual volume",      val: volR,  win: "vol"  });
+
+      for (const t of triggers) {
+        const alertKey = `${ticker}_${t.win}_${today}`;
+        const sign = t.val >= 0 ? "+" : "";
+        const body = t.win === "vol"
+          ? `${ticker} Volumen ${t.val.toFixed(1)}× über dem Durchschnitt`
+          : `${ticker} ${sign}${t.val.toFixed(1)}% (${t.win})`;
+
+        newAlerts.push({
+          key: alertKey,
+          alertData: { ticker, label: t.label, window: t.win, value: t.val, price: b0.c, timestamp: FieldValue.serverTimestamp() },
+          fcmTitle: `${t.label}: ${ticker}`,
+          fcmBody: body,
+          ticker,
+        });
+      }
+    }
+
+    // ── 5. Write scan results in batches of 499 ───────────────────────────────
+    for (let i = 0; i < scanEntries.length; i += 499) {
+      const chunk = scanEntries.slice(i, i + 499);
+      const batch = db.batch();
+      for (const { ticker, data } of chunk) {
+        batch.set(db.collection("chip_radar_scanResults").doc(ticker), data);
+      }
+      await batch.commit();
+    }
+    console.log(`${scanEntries.length} scan results written`);
+
+    // ── 6. Deduplicate alerts and send FCM ────────────────────────────────────
+    let alertsFired = 0;
+    for (const alert of newAlerts) {
+      const ref = db.collection("chip_radar_alertHistory").doc(alert.key);
+      if ((await ref.get()).exists) continue; // already fired today
+
+      await ref.set(alert.alertData);
+
+      if (tokens.length > 0) {
+        await messaging.sendEachForMulticast({
+          tokens,
+          notification: { title: alert.fcmTitle, body: alert.fcmBody },
+          data: { ticker: alert.ticker, route: "/chip-radar" },
+          android: { priority: "high" },
+          apns: { payload: { aps: { sound: "default" } } },
+        }).catch(e => console.error(`FCM error for ${alert.ticker}:`, e.message));
+      }
+      alertsFired++;
+    }
+
+    console.log(`dailyChipScan complete — ${scanEntries.length} tickers, ${alertsFired} alerts fired.`);
   }
 );

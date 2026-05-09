@@ -17,6 +17,7 @@ class AppScaffold extends ConsumerWidget {
     AppRoutes.accounts,
     AppRoutes.debts,
     AppRoutes.analyse,
+    AppRoutes.chipRadar,
   };
 
   @override
@@ -130,6 +131,11 @@ class AppBottomNav extends StatelessWidget {
             icon: Icon(Icons.query_stats_outlined),
             activeIcon: Icon(Icons.query_stats),
             label: 'Analyse',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.radar_outlined),
+            activeIcon: Icon(Icons.radar),
+            label: 'Chip Radar',
           ),
         ],
       ),

@@ -15,6 +15,7 @@ import '../../features/auth/screens/login_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/investments/screens/investments_screen.dart';
 import '../../features/giro/screens/giro_screen.dart';
+import '../../features/chip_radar/screens/chip_radar_screen.dart';
 import '../../features/schulden/screens/schulden_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/verlauf/screens/verlauf_screen.dart';
@@ -36,6 +37,7 @@ class AppRoutes {
   static const analyseTopFlop = '/analyse/topflop';
   static const analyseKategorien = '/analyse/kategorien';
   static const analyseFestgeld = '/analyse/festgeld';
+  static const chipRadar = '/chip-radar';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -137,6 +139,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(path: 'kategorien', builder: (_, __) => const KategorienDetailScreen()),
                   GoRoute(path: 'festgeld',   builder: (_, __) => const FestgeldDetailScreen()),
                 ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.chipRadar,
+                builder: (_, __) => const ChipRadarScreen(),
               ),
             ],
           ),

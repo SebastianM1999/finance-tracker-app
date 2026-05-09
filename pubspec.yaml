@@ -56,6 +56,9 @@ dependencies:
   # HTTP client
   http: ^1.2.2
 
+  # Open links in external browser
+  url_launcher: ^6.3.0
+
   # Open system settings pages
   app_settings: ^5.1.1
 

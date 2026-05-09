@@ -53,3 +53,6 @@ android/app/fintrack-release.jks
 
 # Firebase local cache
 .firebase/
+
+# Cloud Function secrets
+functions/.env

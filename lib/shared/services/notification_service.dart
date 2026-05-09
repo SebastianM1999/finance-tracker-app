@@ -17,6 +17,8 @@ class NotificationService {
   static const _channelName = 'Festgeld Fälligkeiten';
   static const _watchlistChannelId = 'watchlist_alerts';
   static const _watchlistChannelName = 'Kurs-Benachrichtigungen';
+  static const _chipRadarChannelId = 'chip_radar_alerts';
+  static const _chipRadarChannelName = 'Chip Radar Alarme';
 
   /// Call once from main() before runApp().
   Future<void> initialize() async {
@@ -70,6 +72,17 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(watchlistChannel);
+
+    const chipChannel = AndroidNotificationChannel(
+      _chipRadarChannelId,
+      _chipRadarChannelName,
+      description: 'Alarme für Halbleiter-Aktien Kurssprünge',
+      importance: Importance.high,
+    );
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(chipChannel);
 
     _initialized = true;
   }
@@ -172,6 +185,30 @@ class NotificationService {
         android: AndroidNotificationDetails(
           _watchlistChannelId,
           _watchlistChannelName,
+          importance: Importance.high,
+          priority: Priority.high,
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+    );
+  }
+
+  /// Show a Chip Radar surge alert (shown when FCM message arrives in foreground).
+  Future<void> showChipRadarAlert({
+    required String title,
+    required String body,
+  }) async {
+    if (kIsWeb) return;
+    final id = title.hashCode ^ body.hashCode;
+    await _plugin.show(
+      id,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _chipRadarChannelId,
+          _chipRadarChannelName,
           importance: Importance.high,
           priority: Priority.high,
           largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),

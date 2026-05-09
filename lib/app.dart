@@ -24,7 +24,7 @@ class FinTrackApp extends ConsumerWidget {
     if (user != null) {
       ref.watch(autoSaveNetWorthProvider);
       // Initialize FCM and store device token for push notifications
-      FcmService.initializeForUser(user.uid);
+      FcmService.initializeForUser(user.uid, router);
     } else {
       FcmService.reset();
     }
