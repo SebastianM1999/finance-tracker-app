@@ -40,6 +40,13 @@ class _ChipRadarScreenState extends ConsumerState<ChipRadarScreen>
         title: const Text('Chip Radar'),
         leading: const SizedBox.shrink(),
         leadingWidth: 52,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, size: 20),
+            tooltip: 'Filter-Info',
+            onPressed: () => _showFilterInfo(context),
+          ),
+        ],
         bottom: TabBar(
           controller: _tab,
           tabs: const [
@@ -710,6 +717,183 @@ class _AlertBadge extends StatelessWidget {
             alert.formattedValue,
             style: TextStyle(
                 fontSize: 10, fontWeight: FontWeight.w600, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Filter info sheet ─────────────────────────────────────────────────────────
+
+void _showFilterInfo(BuildContext context) {
+  final theme = Theme.of(context);
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) => Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      // DraggableScrollableSheet inside so content can scroll on small screens
+      child: DraggableScrollableSheet(
+        initialChildSize: 1,
+        minChildSize: 1,
+        maxChildSize: 1,
+        expand: false,
+        builder: (_, controller) => SingleChildScrollView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurface.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Icon(Icons.radar, color: theme.colorScheme.primary, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Was wird angezeigt?',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _FilterRow(
+                icon: Icons.check_circle_outline,
+                color: const Color(0xFF66BB6A),
+                label: 'Preis ≥ \$10',
+                detail: 'Penny Stocks unter \$10 werden ignoriert.',
+              ),
+              _FilterRow(
+                icon: Icons.check_circle_outline,
+                color: const Color(0xFF66BB6A),
+                label: 'Ø Volumen ≥ 50.000 Aktien/Tag',
+                detail: 'Illiquide Micro-Caps mit zu wenig Handelsvolumen werden ausgeblendet.',
+              ),
+              _FilterRow(
+                icon: Icons.check_circle_outline,
+                color: const Color(0xFF66BB6A),
+                label: 'Tagesvolumen ≥ 1× Durchschnitt',
+                detail: 'Aktien unter ihrem eigenen Durchschnitt werden nicht angezeigt.',
+              ),
+              _FilterRow(
+                icon: Icons.check_circle_outline,
+                color: const Color(0xFF66BB6A),
+                label: 'Momentum-Schwelle annähernd erreicht',
+                detail: '7d ≥ 17 %, 1d ≥ 8,5 %, 14d ≥ 34 %, 21d ≥ 51 % oder Vol ≥ 1,7×',
+              ),
+              const SizedBox(height: 20),
+              Divider(color: theme.colorScheme.outline.withOpacity(0.3)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Icon(Icons.block_outlined, color: Color(0xFFEF5350), size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Was wird ignoriert?',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _FilterRow(
+                icon: Icons.remove_circle_outline,
+                color: const Color(0xFFEF5350),
+                label: 'Preis < \$10',
+                detail: 'Penny Stocks — zu anfällig für Manipulation.',
+              ),
+              _FilterRow(
+                icon: Icons.remove_circle_outline,
+                color: const Color(0xFFEF5350),
+                label: 'Ø Volumen < 50.000 Aktien/Tag',
+                detail: 'Zu wenig Liquidität für verlässliche Signale.',
+              ),
+              _FilterRow(
+                icon: Icons.remove_circle_outline,
+                color: const Color(0xFFEF5350),
+                label: 'Kein Momentum',
+                detail: 'Aktien, die keinen der Schwellenwerte annähernd erreichen.',
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.lightbulb_outline,
+                        size: 16, color: theme.colorScheme.secondary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Der tägliche Scan prüft ~8.000 US-Aktien. Nach den Filtern verbleiben typischerweise 80–150 relevante Aktien.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _FilterRow extends StatelessWidget {
+  const _FilterRow({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.detail,
+  });
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(detail,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withOpacity(0.55))),
+              ],
+            ),
           ),
         ],
       ),

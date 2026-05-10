@@ -634,7 +634,7 @@ function _fmtPrice(p) {
 }
 
 exports.watchlistAlerts = onSchedule(
-  { schedule: "every 15 minutes", region: "us-central1", timeoutSeconds: 300 },
+  { schedule: "every 60 minutes", region: "us-central1", timeoutSeconds: 300 },
   async () => {
     _cachedEurRate = null; // reset per-run cache
     const db = getFirestore();
@@ -759,7 +759,8 @@ exports.dailyChipScan = onSchedule(
     schedule: "0 17 * * 1-5",
     timeZone: "America/New_York",
     region: "us-central1",
-    timeoutSeconds: 300,
+    timeoutSeconds: 540,  // 9 min — grouped endpoint: 5 calls + 4×13s delay + Firestore writes
+    memory: "512MiB",
   },
   async () => {
     const db = getFirestore();
@@ -801,8 +802,8 @@ exports.dailyChipScan = onSchedule(
     const newAlerts   = [];  // deduplicated, then FCM sent
 
     for (const [ticker, b0] of Object.entries(barsToday)) {
-      // Skip penny stocks and very illiquid tickers
-      if (b0.c < 1.0 || b0.v < 10000) continue;
+      // ── Pre-filter: price, liquidity ─────────────────────────────────────
+      if (b0.c < 15) continue;         // under $15 → skip (penny / micro cap)
 
       const b1  = bars1d[ticker];
       const b7  = bars7d[ticker];
@@ -823,13 +824,16 @@ exports.dailyChipScan = onSchedule(
         : 0;
       const volR = avgVol > 0 ? b0.v / avgVol : 0;
 
-      // Only keep stocks where at least one indicator is approaching or past a threshold
+      if (avgVol < 500000) continue;   // avg daily volume under 500k → too illiquid / micro cap
+      if (volR < 1.0) continue;        // below average volume → skip
+
+      // Only keep stocks where at least one alert threshold is actually crossed
       const isInteresting =
-        (ch1d  != null && ch1d  >= 8.5) ||
-        ch7d              >= 17         ||
-        (ch14d != null && ch14d >= 34)  ||
-        (ch21d != null && ch21d >= 51)  ||
-        volR              >= 1.7;
+        (ch1d  != null && ch1d  >= 10) ||
+        ch7d              >= 20        ||
+        (ch14d != null && ch14d >= 40) ||
+        (ch21d != null && ch21d >= 60) ||
+        volR              >= 2.0;
 
       if (isInteresting) {
         scanEntries.push({
@@ -875,6 +879,19 @@ exports.dailyChipScan = onSchedule(
     }
 
     // ── 5. Write scan results in batches of 499 ───────────────────────────────
+    const freshTickers = new Set(scanEntries.map(e => e.ticker));
+
+    // Delete any docs from previous runs that no longer meet thresholds
+    const existingSnap = await db.collection("chip_radar_scanResults").get();
+    const stale = existingSnap.docs.filter(d => !freshTickers.has(d.id));
+    for (let i = 0; i < stale.length; i += 499) {
+      const batch = db.batch();
+      stale.slice(i, i + 499).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    console.log(`${stale.length} stale results deleted`);
+
+    // Write fresh results
     for (let i = 0; i < scanEntries.length; i += 499) {
       const chunk = scanEntries.slice(i, i + 499);
       const batch = db.batch();
