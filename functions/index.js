@@ -902,24 +902,30 @@ exports.dailyChipScan = onSchedule(
     }
     console.log(`${scanEntries.length} scan results written`);
 
-    // ── 6. Deduplicate alerts and send FCM ────────────────────────────────────
+    // ── 6. Deduplicate alerts and write to Firestore ──────────────────────────
     let alertsFired = 0;
     for (const alert of newAlerts) {
       const ref = db.collection("chip_radar_alertHistory").doc(alert.key);
       if ((await ref.get()).exists) continue; // already fired today
-
       await ref.set(alert.alertData);
-
-      if (tokens.length > 0) {
-        await messaging.sendEachForMulticast({
-          tokens,
-          notification: { title: alert.fcmTitle, body: alert.fcmBody },
-          data: { ticker: alert.ticker, route: "/chip-radar" },
-          android: { priority: "high" },
-          apns: { payload: { aps: { sound: "default" } } },
-        }).catch(e => console.error(`FCM error for ${alert.ticker}:`, e.message));
-      }
       alertsFired++;
+    }
+
+    // ── 7. Send ONE summary push notification ─────────────────────────────────
+    if (alertsFired > 0 && tokens.length > 0) {
+      const uniqueTickers = [...new Set(newAlerts.map(a => a.ticker))];
+      const tickerPreview = uniqueTickers.slice(0, 3).join(", ");
+      const moreCount = uniqueTickers.length > 3 ? ` +${uniqueTickers.length - 3} more` : "";
+      await messaging.sendEachForMulticast({
+        tokens,
+        notification: {
+          title: `📡 Chip Radar — ${alertsFired} neue Signale`,
+          body: `${tickerPreview}${moreCount} haben Schwellenwerte überschritten`,
+        },
+        data: { route: "/chip-radar" },
+        android: { priority: "high" },
+        apns: { payload: { aps: { sound: "default" } } },
+      }).catch(e => console.error("FCM summary error:", e.message));
     }
 
     console.log(`dailyChipScan complete — ${scanEntries.length} tickers, ${alertsFired} alerts fired.`);
