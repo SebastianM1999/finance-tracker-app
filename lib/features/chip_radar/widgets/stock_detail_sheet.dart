@@ -1,11 +1,8 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/chip_scan_result.dart';
-import '../models/stock_detail.dart' show StockDetail, MacdData;
-import '../services/chip_detail_service.dart';
 
 void showStockDetailSheet(BuildContext context, ChipScanResult result) {
   showModalBottomSheet(
@@ -16,30 +13,14 @@ void showStockDetailSheet(BuildContext context, ChipScanResult result) {
   );
 }
 
-class _StockDetailSheet extends StatefulWidget {
+class _StockDetailSheet extends StatelessWidget {
   const _StockDetailSheet({required this.result});
   final ChipScanResult result;
 
   @override
-  State<_StockDetailSheet> createState() => _StockDetailSheetState();
-}
-
-class _StockDetailSheetState extends State<_StockDetailSheet> {
-  StockDetail? _detail;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    ChipDetailService.fetch(widget.result.ticker).then((d) {
-      if (mounted) setState(() { _detail = d; _loading = false; });
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final r = widget.result;
+    final r = result;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.55,
@@ -64,7 +45,7 @@ class _StockDetailSheetState extends State<_StockDetailSheet> {
                 ),
               ),
             ),
-            // Header
+            // Header: ticker + company name | current price
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
               child: Row(
@@ -99,34 +80,30 @@ class _StockDetailSheetState extends State<_StockDetailSheet> {
                 controller: controller,
                 padding: const EdgeInsets.all(20),
                 children: [
-                  if (_loading)
-                    const Center(child: CircularProgressIndicator())
-                  else if (_detail == null)
-                    Center(
-                      child: Text('Keine Daten verfügbar',
-                          style: theme.textTheme.bodySmall),
-                    )
-                  else ...[
-                    _Week52Bar(result: r, detail: _detail!)
+                  // 1. Gesamt-Score + wave badge
+                  if (r.score != null) ...[
+                    _ScoreRow(score: r.score!, waveLabel: r.waveLabel),
+                    const SizedBox(height: 12),
+                  ],
+                  // 2. Relative Stärke card
+                  if (r.rs21Rank != null || r.rs63Rank != null) ...[
+                    _RsRankCard(result: r)
                         .animate()
                         .fadeIn(duration: 300.ms)
                         .slideY(begin: 0.05, end: 0),
-                    const SizedBox(height: 20),
-                    _RSIGauge(rsi: _detail!.rsi14)
-                        .animate()
-                        .fadeIn(delay: 80.ms, duration: 300.ms)
-                        .slideY(begin: 0.05, end: 0),
-                    const SizedBox(height: 20),
-                    _MacdCard(macd: _detail!.macd)
-                        .animate()
-                        .fadeIn(delay: 160.ms, duration: 300.ms)
-                        .slideY(begin: 0.05, end: 0),
-                    const SizedBox(height: 20),
-                    _AnalystCard(detail: _detail!, currentPrice: r.price)
-                        .animate()
-                        .fadeIn(delay: 240.ms, duration: 300.ms)
-                        .slideY(begin: 0.05, end: 0),
+                    const SizedBox(height: 16),
                   ],
+                  // 3. Kennzahlen row
+                  _KennzahlenRow(result: r)
+                      .animate()
+                      .fadeIn(delay: 80.ms, duration: 300.ms)
+                      .slideY(begin: 0.05, end: 0),
+                  const SizedBox(height: 20),
+                  // 4. Browser buttons
+                  _BrowserButtons(ticker: r.ticker)
+                      .animate()
+                      .fadeIn(delay: 160.ms, duration: 300.ms)
+                      .slideY(begin: 0.05, end: 0),
                 ],
               ),
             ),
@@ -137,374 +114,179 @@ class _StockDetailSheetState extends State<_StockDetailSheet> {
   }
 }
 
-// ── 52-week range bar ─────────────────────────────────────────────────────────
+// ── Score row ─────────────────────────────────────────────────────────────────
 
-class _Week52Bar extends StatelessWidget {
-  const _Week52Bar({required this.result, required this.detail});
-  final ChipScanResult result;
-  final StockDetail detail;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final low = detail.week52Low;
-    final high = detail.week52High;
-
-    return _Card(
-      title: '52-Wochen Range',
-      child: low == null || high == null
-          ? Text('—', style: theme.textTheme.bodySmall)
-          : Column(
-              children: [
-                _RangeBar(low: low, high: high, current: result.price),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _Label('Tief', '\$${low.toStringAsFixed(2)}',
-                        const Color(0xFFEF5350)),
-                    _Label(
-                      'Aktuell',
-                      '\$${result.price.toStringAsFixed(2)}',
-                      const Color(0xFF66BB6A),
-                      center: true,
-                    ),
-                    _Label('Hoch', '\$${high.toStringAsFixed(2)}',
-                        const Color(0xFF42A5F5),
-                        alignRight: true),
-                  ],
-                ),
-              ],
-            ),
-    );
-  }
-}
-
-class _RangeBar extends StatelessWidget {
-  const _RangeBar(
-      {required this.low, required this.high, required this.current});
-  final double low, high, current;
+class _ScoreRow extends StatelessWidget {
+  const _ScoreRow({required this.score, required this.waveLabel});
+  final int score;
+  final String? waveLabel;
 
   @override
   Widget build(BuildContext context) {
-    final range = high - low;
-    final position = range > 0 ? ((current - low) / range).clamp(0.0, 1.0) : 0.5;
-
-    return LayoutBuilder(builder: (context, constraints) {
-      final w = constraints.maxWidth;
-      return SizedBox(
-        height: 28,
-        child: Stack(
-          alignment: Alignment.centerLeft,
-          children: [
-            // Track
-            Container(
-              height: 6,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(3),
-                gradient: const LinearGradient(colors: [
-                  Color(0xFFEF5350),
-                  Color(0xFFFFCA28),
-                  Color(0xFF42A5F5),
-                ]),
-              ),
-            ),
-            // Thumb
-            Positioned(
-              left: (position * w - 9).clamp(0.0, w - 18),
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF66BB6A),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2))
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-// ── RSI gauge ─────────────────────────────────────────────────────────────────
-
-class _RSIGauge extends StatelessWidget {
-  const _RSIGauge({required this.rsi});
-  final double? rsi;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    String label;
-    Color color;
-    if (rsi == null) {
-      label = '—';
-      color = Colors.grey;
-    } else if (rsi! < 30) {
-      label = 'Überverkauft';
-      color = const Color(0xFF42A5F5);
-    } else if (rsi! > 70) {
-      label = 'Überkauft';
-      color = const Color(0xFFEF5350);
+    final Color bg;
+    final Color fg;
+    if (score >= 80) {
+      bg = const Color(0xFFEAF3DE); fg = const Color(0xFF3B6D11);
+    } else if (score >= 60) {
+      bg = const Color(0xFFFAEEDA); fg = const Color(0xFF854F0B);
     } else {
-      label = 'Neutral';
-      color = const Color(0xFF66BB6A);
+      bg = Theme.of(context).colorScheme.surfaceContainerHighest;
+      fg = Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
     }
 
-    return _Card(
-      title: 'RSI (14)',
-      child: rsi == null
-          ? Text('—', style: theme.textTheme.bodySmall)
-          : Column(
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      rsi!.toStringAsFixed(1),
-                      style: theme.textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w800, color: color),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(6),
-                        border:
-                            Border.all(color: color.withOpacity(0.4)),
-                      ),
-                      child: Text(label,
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: color)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _RSIBar(rsi: rsi!),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('0  Überverkauft <30',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: Colors.grey)),
-                    Text('>70 Überkauft  100',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: Colors.grey)),
-                  ],
-                ),
-              ],
-            ),
-    );
-  }
-}
+    final (waveDisplay, waveColor) = waveLabelStyle(waveLabel);
 
-class _RSIBar extends StatelessWidget {
-  const _RSIBar({required this.rsi});
-  final double rsi;
-
-  @override
-  Widget build(BuildContext context) {
-    final position = (rsi / 100).clamp(0.0, 1.0);
-    return LayoutBuilder(builder: (context, constraints) {
-      final w = constraints.maxWidth;
-      return SizedBox(
-        height: 28,
-        child: Stack(
-          alignment: Alignment.centerLeft,
-          children: [
-            Container(
-              height: 6,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(3),
-                gradient: const LinearGradient(colors: [
-                  Color(0xFF42A5F5),
-                  Color(0xFF66BB6A),
-                  Color(0xFFFFCA28),
-                  Color(0xFFEF5350),
-                ]),
-              ),
-            ),
-            // Oversold zone marker
-            Positioned(
-              left: w * 0.3 - 0.5,
-              child: Container(width: 1, height: 12,
-                  color: Colors.white.withOpacity(0.3)),
-            ),
-            // Overbought zone marker
-            Positioned(
-              left: w * 0.7 - 0.5,
-              child: Container(width: 1, height: 12,
-                  color: Colors.white.withOpacity(0.3)),
-            ),
-            Positioned(
-              left: (position * w - 9).clamp(0.0, w - 18),
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                      color: rsi < 30
-                          ? const Color(0xFF42A5F5)
-                          : rsi > 70
-                              ? const Color(0xFFEF5350)
-                              : const Color(0xFF66BB6A),
-                      width: 2.5),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2))
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-// ── MACD card ─────────────────────────────────────────────────────────────────
-
-class _MacdCard extends StatelessWidget {
-  const _MacdCard({required this.macd});
-  final MacdData? macd;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final m = macd;
-
-    if (m == null) {
-      return _Card(
-        title: 'MACD (12, 26, 9)',
-        child: Text('—', style: theme.textTheme.bodySmall),
-      );
-    }
-
-    final bullish = m.isBullish;
-    final strengthening = m.isStrengthening;
-    final signalColor =
-        bullish ? const Color(0xFF66BB6A) : const Color(0xFFEF5350);
-
-    String interpretation;
-    if (bullish && strengthening) {
-      interpretation = 'Momentum aufbauend — bullisch';
-    } else if (bullish && !strengthening) {
-      interpretation = 'Bullisch aber nachlassend';
-    } else if (!bullish && !strengthening) {
-      interpretation = 'Momentum abbauend — bärisch';
-    } else {
-      interpretation = 'Bärisch aber nachlassend';
-    }
-
-    return _Card(
-      title: 'MACD (12, 26, 9)',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Signal pill
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: signalColor.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: signalColor.withOpacity(0.4)),
-            ),
-            child: Text(
-              interpretation,
+    return Row(
+      children: [
+        Text('Gesamt-Score',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w500)),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration:
+              BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+          child: Text('$score',
               style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: signalColor),
+                  fontSize: 14, fontWeight: FontWeight.w800, color: fg)),
+        ),
+        if (waveDisplay.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: waveColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: waveColor.withOpacity(0.5)),
             ),
+            child: Text(waveDisplay,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: waveColor)),
           ),
-          const SizedBox(height: 12),
-          // Three values in a row
-          Row(
-            children: [
-              _MacdStat('MACD', m.macd, signalColor),
-              const SizedBox(width: 20),
-              _MacdStat('Signal', m.signal,
-                  theme.colorScheme.onSurface.withOpacity(0.7)),
-              const SizedBox(width: 20),
-              _MacdStat(
-                'Histogramm',
-                m.histogram,
-                m.histogram >= 0
-                    ? const Color(0xFF66BB6A)
-                    : const Color(0xFFEF5350),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // Mini histogram bar chart (last 10 days)
-          if (m.histogramSeries.isNotEmpty)
-            _HistogramMiniChart(series: m.histogramSeries),
+        ],
+      ],
+    );
+  }
+}
+
+// ── RS rank card ──────────────────────────────────────────────────────────────
+
+class _RsRankCard extends StatelessWidget {
+  const _RsRankCard({required this.result});
+  final ChipScanResult result;
+
+  static String _rsLabel(int rank) {
+    if (rank >= 90) return 'Marktführer';
+    if (rank >= 75) return 'Überdurchschnittlich';
+    if (rank >= 50) return 'Durchschnitt';
+    return 'Unterdurchschnittlich';
+  }
+
+  static Color _rsColor(int rank) {
+    if (rank >= 90) return const Color(0xFF66BB6A);
+    if (rank >= 75) return const Color(0xFF42A5F5);
+    if (rank >= 50) return const Color(0xFFFFCA28);
+    return Colors.grey;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = result;
+    return _Card(
+      title: 'Relative Stärke',
+      child: Column(
+        children: [
+          if (r.rs21Rank != null)
+            _RsRankRow(
+              label: 'RS(21d)',
+              rank: r.rs21Rank!,
+              rsLabel: _rsLabel(r.rs21Rank!),
+              color: _rsColor(r.rs21Rank!),
+            ),
+          if (r.rs21Rank != null && r.rs63Rank != null)
+            const SizedBox(height: 14),
+          if (r.rs63Rank != null)
+            _RsRankRow(
+              label: 'RS(63d)',
+              rank: r.rs63Rank!,
+              rsLabel: _rsLabel(r.rs63Rank!),
+              color: _rsColor(r.rs63Rank!),
+            ),
         ],
       ),
     );
   }
 }
 
-class _MacdStat extends StatelessWidget {
-  const _MacdStat(this.label, this.value, this.color);
+class _RsRankRow extends StatelessWidget {
+  const _RsRankRow({
+    required this.label,
+    required this.rank,
+    required this.rsLabel,
+    required this.color,
+  });
   final String label;
-  final double value;
+  final int rank;
+  final String rsLabel;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final sign = value >= 0 ? '+' : '';
+    final topPct = 100 - rank;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(fontSize: 10, color: Colors.grey)),
-        Text('$sign${value.toStringAsFixed(3)}',
-            style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-      ],
-    );
-  }
-}
-
-class _HistogramMiniChart extends StatelessWidget {
-  const _HistogramMiniChart({required this.series});
-  final List<double> series;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxAbs = series.map((v) => v.abs()).fold(0.0, max);
-    if (maxAbs == 0) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Histogramm (10 Tage)',
-            style: const TextStyle(fontSize: 10, color: Colors.grey)),
-        const SizedBox(height: 6),
-        SizedBox(
-          height: 48,
-          child: CustomPaint(
-            painter: _HistPainter(series: series, maxAbs: maxAbs),
-            size: Size.infinite,
+        Row(
+          children: [
+            SizedBox(
+              width: 52,
+              child: Text(label,
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey)),
+            ),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: rank / 100,
+                  minHeight: 6,
+                  backgroundColor: Colors.grey.withOpacity(0.2),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 42,
+              child: Text(
+                '$rank. Pz.',
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w700, color: color),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(left: 52),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '$rsLabel  ·  Top $topPct%',
+              style: TextStyle(
+                  fontSize: 10, fontWeight: FontWeight.w600, color: color),
+            ),
           ),
         ),
       ],
@@ -512,129 +294,127 @@ class _HistogramMiniChart extends StatelessWidget {
   }
 }
 
-class _HistPainter extends CustomPainter {
-  _HistPainter({required this.series, required this.maxAbs});
-  final List<double> series;
-  final double maxAbs;
+// ── Kennzahlen row ────────────────────────────────────────────────────────────
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final midY = size.height / 2;
-    final barW = size.width / series.length;
-    final gap = barW * 0.18;
-
-    // Centre line
-    canvas.drawLine(
-      Offset(0, midY),
-      Offset(size.width, midY),
-      Paint()
-        ..color = Colors.grey.withOpacity(0.25)
-        ..strokeWidth = 0.8,
-    );
-
-    for (int i = 0; i < series.length; i++) {
-      final val = series[i];
-      final frac = val.abs() / maxAbs;
-      final barH = (frac * (midY - 2)).clamp(1.5, midY - 2);
-      final isLast = i == series.length - 1;
-      final color = val >= 0
-          ? (isLast ? const Color(0xFF43A047) : const Color(0xFF81C784))
-          : (isLast ? const Color(0xFFE53935) : const Color(0xFFEF9A9A));
-
-      final left = i * barW + gap;
-      final right = (i + 1) * barW - gap;
-      final top = val >= 0 ? midY - barH : midY;
-      final bottom = val >= 0 ? midY : midY + barH;
-
-      canvas.drawRRect(
-        RRect.fromLTRBR(left, top, right, bottom, const Radius.circular(2)),
-        Paint()..color = color,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_HistPainter old) =>
-      old.series != series || old.maxAbs != maxAbs;
-}
-
-// ── Analyst card ──────────────────────────────────────────────────────────────
-
-class _AnalystCard extends StatelessWidget {
-  const _AnalystCard({required this.detail, required this.currentPrice});
-  final StockDetail detail;
-  final double currentPrice;
+class _KennzahlenRow extends StatelessWidget {
+  const _KennzahlenRow({required this.result});
+  final ChipScanResult result;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final key = detail.recommendationKey?.toLowerCase() ?? '';
-    final (recLabel, recColor) = switch (key) {
-      'strong_buy' => ('Strong Buy', const Color(0xFF43A047)),
-      'buy'        => ('Buy',         const Color(0xFF66BB6A)),
-      'hold'       => ('Hold',        const Color(0xFFFFCA28)),
-      'underperform' || 'sell' => ('Sell', const Color(0xFFEF5350)),
-      _ => ('—', Colors.grey),
-    };
-
-    final upside = detail.targetMeanPrice != null
-        ? ((detail.targetMeanPrice! - currentPrice) / currentPrice * 100)
-        : null;
-
+    final r = result;
     return _Card(
-      title: 'Analysten (${detail.numberOfAnalysts ?? '?'} Meinungen)',
+      title: 'Kennzahlen',
       child: Row(
         children: [
-          // Recommendation pill
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: recColor.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: recColor.withOpacity(0.5)),
-            ),
-            child: Text(recLabel,
-                style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: recColor)),
+          _KennzahlCell(
+            label: 'Preis',
+            value: '\$${r.price.toStringAsFixed(2)}',
           ),
-          const SizedBox(width: 20),
-          if (detail.targetMeanPrice != null)
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Kursziel (Ø)',
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: Colors.grey)),
-                  const SizedBox(height: 2),
-                  Text(
-                    '\$${detail.targetMeanPrice!.toStringAsFixed(2)}',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  if (upside != null)
-                    Text(
-                      '${upside >= 0 ? '+' : ''}${upside.toStringAsFixed(1)}% vs. heute',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: upside >= 0
-                              ? const Color(0xFF66BB6A)
-                              : const Color(0xFFEF5350)),
-                    ),
-                ],
-              ),
-            ),
+          _KennzahlCell(
+            label: '7d%',
+            value:
+                '${r.change7d >= 0 ? '+' : ''}${r.change7d.toStringAsFixed(1)}%',
+            valueColor: r.change7d >= 0
+                ? const Color(0xFF66BB6A)
+                : const Color(0xFFEF5350),
+          ),
+          _KennzahlCell(
+            label: '21d%',
+            value:
+                '${r.change21d >= 0 ? '+' : ''}${r.change21d.toStringAsFixed(1)}%',
+            valueColor: r.change21d >= 0
+                ? const Color(0xFF66BB6A)
+                : const Color(0xFFEF5350),
+          ),
+          _KennzahlCell(
+            label: 'Vol/Ø',
+            value: '${r.volumeRatio.toStringAsFixed(1)}×',
+            valueColor:
+                r.volumeRatio >= 2.0 ? const Color(0xFF42A5F5) : null,
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Shared widgets ────────────────────────────────────────────────────────────
+class _KennzahlCell extends StatelessWidget {
+  const _KennzahlCell(
+      {required this.label, required this.value, this.valueColor});
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          const SizedBox(height: 2),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: valueColor)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Browser buttons ───────────────────────────────────────────────────────────
+
+class _BrowserButtons extends StatelessWidget {
+  const _BrowserButtons({required this.ticker});
+  final String ticker;
+
+  Future<void> _open(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () =>
+                _open('https://finance.yahoo.com/quote/$ticker/analysis/'),
+            icon: const Text('📊', style: TextStyle(fontSize: 14)),
+            label: const Text('Analyse'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () =>
+                _open('https://finance.yahoo.com/quote/$ticker/chart/'),
+            icon: const Text('📈', style: TextStyle(fontSize: 14)),
+            label: const Text('Chart'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () =>
+                _open('https://finance.yahoo.com/quote/$ticker/profile/'),
+            icon: const Text('🏢', style: TextStyle(fontSize: 14)),
+            label: const Text('Profil'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Shared card shell ─────────────────────────────────────────────────────────
 
 class _Card extends StatelessWidget {
   const _Card({required this.title, required this.child});
@@ -660,33 +440,6 @@ class _Card extends StatelessWidget {
           child,
         ],
       ),
-    );
-  }
-}
-
-class _Label extends StatelessWidget {
-  const _Label(this.label, this.value, this.color,
-      {this.center = false, this.alignRight = false});
-  final String label, value;
-  final Color color;
-  final bool center, alignRight;
-
-  @override
-  Widget build(BuildContext context) {
-    final align = alignRight
-        ? CrossAxisAlignment.end
-        : center
-            ? CrossAxisAlignment.center
-            : CrossAxisAlignment.start;
-    return Column(
-      crossAxisAlignment: align,
-      children: [
-        Text(label,
-            style: const TextStyle(fontSize: 10, color: Colors.grey)),
-        Text(value,
-            style: TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w700, color: color)),
-      ],
     );
   }
 }

@@ -41,6 +41,7 @@ class StockDetail {
     this.recommendationMean,
     this.rsi14,
     this.macd,
+    this.source,
   });
 
   final String ticker;
@@ -52,6 +53,12 @@ class StockDetail {
   final double? recommendationMean;
   final double? rsi14;
   final MacdData? macd;
+
+  /// 'firestore_fallback' when Yahoo Finance is unreachable and the Cloud
+  /// Function returned cached scan data instead of live indicators.
+  final String? source;
+
+  bool get isFirestoreFallback => source == 'firestore_fallback';
 
   factory StockDetail.fromJson(Map<String, dynamic> j) => StockDetail(
         ticker:             j['ticker'] as String,
@@ -65,5 +72,6 @@ class StockDetail {
         macd: j['macd'] != null
             ? MacdData.fromJson(j['macd'] as Map<String, dynamic>)
             : null,
+        source: j['source'] as String?,
       );
 }

@@ -56,3 +56,9 @@ android/app/fintrack-release.jks
 
 # Cloud Function secrets
 functions/.env
+
+# open .gitignore in project root and add these lines
+node_modules/
+package-lock.json
+ohlcv_state_backup.json
+backfill.js

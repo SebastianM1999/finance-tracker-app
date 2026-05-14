@@ -3,6 +3,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+const { getStorage } = require("firebase-admin/storage");
 const axios = require("axios");
 
 if (getApps().length === 0) initializeApp();
@@ -301,113 +302,243 @@ async function dailyIndex(ticker) {
   } catch { return null; }
 }
 
-// ── Wave label (batch scan — RSI proxied by ch21d) ────────────────────────────
-// ch21d correlates tightly with RSI: >75 ≈ RSI>75, >=50 ≈ RSI>=60, <50 ≈ RSI<65
+// ── Chip Radar helpers ────────────────────────────────────────────────────────
 
-function _waveLabel(ch7d, ch21d) {
-  if (ch21d > 75)                       return "extended";
-  if (ch7d >= 20 && ch21d >= 50)        return "running";
-  if (ch7d >= 20 && ch21d < 50)         return "early";
-  if (ch7d < 20)                        return "watching";
+function daysBetween(dateStr1, dateStr2) {
+  const d1 = new Date(dateStr1 + "T12:00:00Z");
+  const d2 = new Date(dateStr2 + "T12:00:00Z");
+  return Math.round(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24));
+}
+
+function median(arr) {
+  if (!arr.length) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
+async function loadState() {
+  try {
+    const file = getStorage().bucket().file("radar/ohlcv_state.json");
+    const [exists] = await file.exists();
+    if (!exists) return { lastUpdatedDate: null, tickers: {} };
+    const [contents] = await file.download();
+    return JSON.parse(contents.toString());
+  } catch (e) {
+    console.error("loadState error:", e.message);
+    return { lastUpdatedDate: null, tickers: {} };
+  }
+}
+
+async function saveState(state) {
+  const file = getStorage().bucket().file("radar/ohlcv_state.json");
+  await file.save(JSON.stringify(state), { contentType: "application/json" });
+}
+
+function computeVolumeMetrics(bars) {
+  if (bars.length < 2) return null;
+
+  const todayBar = bars[bars.length - 1];
+  const todayVol = todayBar.v;
+  const todayDollarVol = todayBar.c * todayBar.v;
+
+  const prev = bars.slice(0, -1);
+  const prev20vols      = prev.slice(-20).map(b => b.v);
+  const prev50vols      = prev.slice(-50).map(b => b.v);
+  const prev20dollarVols = prev.slice(-20).map(b => b.c * b.v);
+
+  const medVol20       = median(prev20vols);
+  const medVol50       = prev50vols.length >= 20 ? median(prev50vols) : null;
+  const medDollarVol20 = median(prev20dollarVols);
+
+  const volRatio20 = medVol20 > 0 ? todayVol / medVol20 : 0;
+  const volRatio50 = medVol50 && medVol50 > 0 ? todayVol / medVol50 : null;
+
+  return { todayVol, todayDollarVol, medVol20, medDollarVol20, volRatio20, volRatio50 };
+}
+
+function computeStructureMetrics(bars) {
+  if (bars.length < 21) return null;
+
+  const closes   = bars.map(b => b.c);
+  const highs    = bars.map(b => b.h);
+  const todayClose = closes[closes.length - 1];
+
+  const smaFn = (n) => {
+    const slice = closes.slice(-n);
+    return slice.reduce((s, v) => s + v, 0) / slice.length;
+  };
+
+  const sma20  = closes.length >= 20  ? smaFn(20)  : null;
+  const sma50  = closes.length >= 50  ? smaFn(50)  : null;
+  const sma200 = closes.length >= 200 ? smaFn(200) : null;
+
+  let sma20Slope = null;
+  if (closes.length >= 25) {
+    const sma20now = smaFn(20);
+    const older    = closes.slice(0, -5);
+    const sma20ago = older.slice(-20).reduce((s, v) => s + v, 0) / 20;
+    sma20Slope = sma20now - sma20ago;
+  }
+
+  const high20  = highs.length >= 20  ? Math.max(...highs.slice(-20))  : null;
+  const high55  = highs.length >= 55  ? Math.max(...highs.slice(-55))  : null;
+  const high252 = highs.length >= 252 ? Math.max(...highs.slice(-252)) : null;
+  const low252  = bars.length  >= 252 ? Math.min(...bars.slice(-252).map(b => b.l)) : null;
+
+  const newHigh20  = high20  != null && todayClose >= high20  * 0.99;
+  const newHigh55  = high55  != null && todayClose >= high55  * 0.99;
+  const newHigh252 = high252 != null && todayClose >= high252 * 0.99;
+
+  const rangePosition252 = (high252 && low252 && high252 !== low252)
+    ? (todayClose - low252) / (high252 - low252) : null;
+  const distFromHigh252 = high252 ? todayClose / high252 : null;
+
+  const todayBar     = bars[bars.length - 1];
+  const closeLocation = (todayBar.h !== todayBar.l)
+    ? (todayBar.c - todayBar.l) / (todayBar.h - todayBar.l) : 0.5;
+
+  const n     = closes.length;
+  const ch1d  = n >= 2  ? (closes[n-1] - closes[n-2])  / closes[n-2]  * 100 : null;
+  const ch7d  = n >= 8  ? (closes[n-1] - closes[n-8])  / closes[n-8]  * 100 : null;
+  const ch14d = n >= 15 ? (closes[n-1] - closes[n-15]) / closes[n-15] * 100 : null;
+  const ch21d = n >= 22 ? (closes[n-1] - closes[n-22]) / closes[n-22] * 100 : null;
+  const ch63d  = n >= 64  ? (closes[n-1] - closes[n-64])  / closes[n-64]  * 100 : null;
+  const ch126d = n >= 127 ? (closes[n-1] - closes[n-127]) / closes[n-127] * 100 : null;
+
+  return {
+    todayClose, sma20, sma50, sma200, sma20Slope,
+    newHigh20, newHigh55, newHigh252,
+    rangePosition252, distFromHigh252, closeLocation,
+    ch1d, ch7d, ch14d, ch21d, ch63d, ch126d,
+  };
+}
+
+function classifyWave(s, vol) {
+  if (s.ch21d > 75 || (s.sma20 && s.todayClose > s.sma20 * 1.25)) return "extended";
+
+  if (
+    s.ch7d >= 8 &&
+    s.ch21d != null && s.ch21d < 50 &&
+    (s.newHigh20 || s.newHigh55) &&
+    vol.volRatio20 >= 1.5 &&
+    s.closeLocation >= 0.65
+  ) return "early";
+
+  if (
+    s.ch7d >= 20 &&
+    s.ch21d != null && s.ch21d >= 35 && s.ch21d <= 75 &&
+    (s.newHigh55 || s.newHigh252) &&
+    vol.volRatio20 >= 1.2
+  ) return "running";
+
+  if (
+    s.ch21d != null && s.ch21d >= 5 && s.ch21d <= 20 &&
+    s.ch63d != null && s.ch63d >= 20 &&
+    s.sma20 && s.sma50 && s.sma20 > s.sma50 &&
+    vol.volRatio20 >= 1.0
+  ) return "accumulating";
+
+  if (s.ch7d >= 10 || (s.ch21d != null && s.ch21d >= 15)) return "watching";
+
   return null;
 }
 
-// ── Technical indicator helpers ───────────────────────────────────────────────
+// ── Phase 4: Relative strength percentile ranking ─────────────────────────────
+//
+// Called after the hard-filter pass with the full allMetrics array.
+// Mutates each metric object in-place: adds rs21Rank, rs63Rank, rs126Rank (0–100).
+// A rank of 95 means "top 5% of all stocks in today's scan".
 
-function _calcRSI14(closes) {
-  if (closes.length < 15) return null;
-  let avgGain = 0, avgLoss = 0;
-  for (let i = 1; i <= 14; i++) {
-    const d = closes[i] - closes[i - 1];
-    if (d > 0) avgGain += d; else avgLoss += Math.abs(d);
-  }
-  avgGain /= 14; avgLoss /= 14;
-  for (let i = 15; i < closes.length; i++) {
-    const d = closes[i] - closes[i - 1];
-    avgGain = (avgGain * 13 + (d > 0 ? d : 0)) / 14;
-    avgLoss = (avgLoss * 13 + (d < 0 ? Math.abs(d) : 0)) / 14;
-  }
-  if (avgLoss === 0) return 100;
-  return Math.round((100 - 100 / (1 + avgGain / avgLoss)) * 10) / 10;
+function assignAllRanks(allMetrics) {
+  // rs21Rank — percentile of 21-day return
+  const with21 = allMetrics.filter(m => m.s.ch21d != null);
+  with21.sort((a, b) => a.s.ch21d - b.s.ch21d);
+  with21.forEach((m, i) => {
+    m.rs21Rank = Math.round((i / Math.max(with21.length - 1, 1)) * 100);
+  });
+
+  // rs63Rank — percentile of 63-day (quarter) return
+  const with63 = allMetrics.filter(m => m.s.ch63d != null);
+  with63.sort((a, b) => a.s.ch63d - b.s.ch63d);
+  with63.forEach((m, i) => {
+    m.rs63Rank = Math.round((i / Math.max(with63.length - 1, 1)) * 100);
+  });
+
+  // rs126Rank — percentile of 126-day (half-year) return
+  // Null for most stocks until ~6 months of history exist — handled gracefully.
+  const with126 = allMetrics.filter(m => m.s.ch126d != null);
+  with126.sort((a, b) => a.s.ch126d - b.s.ch126d);
+  with126.forEach((m, i) => {
+    m.rs126Rank = Math.round((i / Math.max(with126.length - 1, 1)) * 100);
+  });
 }
 
-// MACD(12,26,9): returns { macd, signal, histogram, histogramSeries (last 10) }
-// Needs at least 34 closes (26 for EMA26 + 9 for signal EMA — offset = 14 between them)
-function _calcMACD(closes) {
-  if (closes.length < 34) return null;
+// ── Phase 5: Composite score (0–100) ──────────────────────────────────────────
+//
+// Five components (max 25 + 25 + 20 + 15 + 10 = 95 pts) plus penalties.
+// Designed so early-stage breakouts outscore extended/overheated stocks.
 
-  function ema(data, period) {
-    const k = 2 / (period + 1);
-    let val = data.slice(0, period).reduce((s, v) => s + v, 0) / period;
-    const result = [val];
-    for (let i = period; i < data.length; i++) {
-      val = data[i] * k + val * (1 - k);
-      result.push(val);
-    }
-    return result;
+function computeSurgeScore(s, vol, m) {
+  let score = 0;
+
+  // ── Component 1: Relative Strength (0–25 pts) ─────────────────────────────
+  if (m.rs21Rank != null) {
+    if      (m.rs21Rank >= 95) score += 25;
+    else if (m.rs21Rank >= 90) score += 20;
+    else if (m.rs21Rank >= 80) score += 14;
+    else if (m.rs21Rank >= 70) score += 8;
+    else                       score += 3;
   }
 
-  const ema12    = ema(closes, 12);           // length: closes.length - 11
-  const ema26    = ema(closes, 26);           // length: closes.length - 25
-  const macdLine = ema26.map((v, i) => ema12[i + 14] - v); // aligned at closes[25+]
-  const signalLine = ema(macdLine, 9);        // length: macdLine.length - 8
+  // ── Component 2: Breakout quality (0–25 pts) ──────────────────────────────
+  if      (s.newHigh252) score += 25;
+  else if (s.newHigh55)  score += 18;
+  else if (s.newHigh20)  score += 10;
 
-  const r = (v) => Math.round(v * 1000) / 1000;
+  // ── Component 3: Volume expansion (0–20 pts) ──────────────────────────────
+  if      (vol.volRatio20 >= 4.0) score += 20;
+  else if (vol.volRatio20 >= 3.0) score += 16;
+  else if (vol.volRatio20 >= 2.0) score += 12;
+  else if (vol.volRatio20 >= 1.5) score += 7;
+  else                            score += 2;
 
-  // Build histogram series (last 10 bars)
-  const seriesStart = Math.max(0, signalLine.length - 10);
-  const histogramSeries = [];
-  for (let i = seriesStart; i < signalLine.length; i++) {
-    histogramSeries.push(r(macdLine[i + 8] - signalLine[i]));
+  // ── Component 4: Trend quality (0–15 pts) ─────────────────────────────────
+  if (s.sma20 && s.sma50 && s.sma200) {
+    if      (s.sma20 > s.sma50 && s.sma50 > s.sma200) score += 15;
+    else if (s.sma20 > s.sma50)                        score += 9;
+    else                                                score += 3;
+  } else if (s.sma20 && s.sma50 && s.sma20 > s.sma50) {
+    score += 9;
   }
 
-  const macd      = r(macdLine[macdLine.length - 1]);
-  const signal    = r(signalLine[signalLine.length - 1]);
-  const histogram = histogramSeries[histogramSeries.length - 1];
+  // ── Component 5: Close quality (0–10 pts) ─────────────────────────────────
+  if      (s.closeLocation >= 0.85) score += 10;
+  else if (s.closeLocation >= 0.70) score += 6;
+  else if (s.closeLocation >= 0.50) score += 3;
 
-  return { macd, signal, histogram, histogramSeries };
+  // ── Penalties ─────────────────────────────────────────────────────────────
+  // Extension: severely overextended stocks score lower than early movers
+  if (s.ch21d != null) {
+    if      (s.ch21d > 150) score -= 20;
+    else if (s.ch21d > 100) score -= 12;
+    else if (s.ch21d > 75)  score -= 6;
+  }
+
+  // Rebound penalty: deep 126d loss suggests dead-cat rather than breakout
+  if      (s.ch126d != null && s.ch126d < -30) score -= 15;
+  else if (s.ch126d != null && s.ch126d < -15) score -= 7;
+
+  // Still far from 52-week high despite recent move
+  if (s.distFromHigh252 != null) {
+    if      (s.distFromHigh252 < 0.80) score -= 10;
+    else if (s.distFromHigh252 < 0.90) score -= 4;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
-
-// ── getStockDetail ────────────────────────────────────────────────────────────
-// Returns 52w high/low, RSI(14), MACD(12,26,9), analyst consensus + target price.
-
-exports.getStockDetail = onRequest(
-  { region: "us-central1", cors: true },
-  async (req, res) => {
-    const ticker = (req.query.ticker ?? "").trim().toUpperCase();
-    if (!ticker) return res.status(400).json({ error: "Missing ticker" });
-
-    const [quoteResp, chartResp] = await Promise.all([
-      axios.get(
-        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`,
-        { headers: YAHOO_HEADERS, timeout: 10000 }
-      ).catch(() => null),
-      // 90 days gives enough bars for MACD(26) + signal(9) with room to spare
-      axios.get(
-        `${YAHOO_CHART_BASE}/${ticker}?range=90d&interval=1d`,
-        { headers: YAHOO_HEADERS, timeout: 10000 }
-      ).catch(() => null),
-    ]);
-
-    const q = quoteResp?.data?.quoteResponse?.result?.[0];
-    if (!q) return res.status(502).json({ error: `No data from Yahoo for ${ticker}` });
-
-    const closes = chartResp?.data?.chart?.result?.[0]
-      ?.indicators?.quote?.[0]?.close?.filter(v => v != null) ?? [];
-
-    return res.json({
-      ticker,
-      week52High:         q.fiftyTwoWeekHigh        ?? null,
-      week52Low:          q.fiftyTwoWeekLow         ?? null,
-      targetMeanPrice:    q.targetMeanPrice         ?? null,
-      numberOfAnalysts:   q.numberOfAnalystOpinions ?? null,
-      recommendationKey:  q.recommendationKey       ?? null,
-      recommendationMean: q.recommendationMean      ?? null,
-      rsi14:              _calcRSI14(closes),
-      macd:               _calcMACD(closes),
-    });
-  }
-);
 
 // ── Cloud Function ────────────────────────────────────────────────────────────
 
@@ -759,8 +890,8 @@ exports.dailyChipScan = onSchedule(
     schedule: "0 17 * * 1-5",
     timeZone: "America/New_York",
     region: "us-central1",
-    timeoutSeconds: 540,  // 9 min — grouped endpoint: 5 calls + 4×13s delay + Firestore writes
-    memory: "512MiB",
+    timeoutSeconds: 540,
+    memory: "2GiB",
   },
   async () => {
     const db = getFirestore();
@@ -768,120 +899,213 @@ exports.dailyChipScan = onSchedule(
     const apiKey = process.env.POLYGON_API_KEY;
     if (!apiKey) { console.error("POLYGON_API_KEY not set"); return; }
 
+    const today = new Date().toISOString().split("T")[0];
+
     // ── 1. Collect FCM tokens (all users) ─────────────────────────────────────
     const usersSnap = await db.collection("users").get();
     const tokens = usersSnap.docs.map(d => d.data().fcmToken).filter(Boolean);
 
-    // ── 2. Fetch 5 grouped bar snapshots (all ~8,000 US stocks each) ──────────
-    // Calendar offsets padded to skip weekends:
-    //   offset 2  ≈ 1 trading day ago
-    //   offset 11 ≈ 7 trading days ago
-    //   offset 21 ≈ 14 trading days ago
-    //   offset 31 ≈ 21 trading days ago
-    const daysAgo = (n) => {
-      const d = new Date();
-      d.setDate(d.getDate() - n);
-      return d.toISOString().split("T")[0];
-    };
-    const today = new Date().toISOString().split("T")[0];
+    // ── 2. Load persisted OHLCV state ─────────────────────────────────────────
+    const state = await loadState();
 
-    const barsToday = await _fetchGroupedBars(today,       apiKey);
-    await new Promise(r => setTimeout(r, 13000));
-    const bars1d    = await _fetchGroupedBars(daysAgo(2),  apiKey);
-    await new Promise(r => setTimeout(r, 13000));
-    const bars7d    = await _fetchGroupedBars(daysAgo(11), apiKey);
-    await new Promise(r => setTimeout(r, 13000));
-    const bars14d   = await _fetchGroupedBars(daysAgo(21), apiKey);
-    await new Promise(r => setTimeout(r, 13000));
-    const bars21d   = await _fetchGroupedBars(daysAgo(31), apiKey);
-
-    console.log(`Processing ${Object.keys(barsToday).length} stocks`);
-
-    // ── 3. Process every stock — keep only interesting ones ───────────────────
-    const scanEntries = [];  // written to Firestore in batch
-    const newAlerts   = [];  // deduplicated, then FCM sent
-
-    for (const [ticker, b0] of Object.entries(barsToday)) {
-      // ── Pre-filter: price, liquidity ─────────────────────────────────────
-      if (b0.c < 15) continue;         // under $15 → skip (penny / micro cap)
-
-      const b1  = bars1d[ticker];
-      const b7  = bars7d[ticker];
-      const b14 = bars14d[ticker];
-      const b21 = bars21d[ticker];
-
-      if (!b7) continue; // need at least 7d history to be useful
-
-      const ch1d  = b1  ? (b0.c - b1.c)  / b1.c  * 100 : null;
-      const ch7d  =        (b0.c - b7.c)  / b7.c  * 100;
-      const ch14d = b14 ? (b0.c - b14.c) / b14.c * 100 : null;
-      const ch21d = b21 ? (b0.c - b21.c) / b21.c * 100 : null;
-
-      // Volume ratio: today vs average of the 4 historical snapshots
-      const historicalVols = [b1, b7, b14, b21].filter(Boolean).map(b => b.v);
-      const avgVol = historicalVols.length > 0
-        ? historicalVols.reduce((s, v) => s + v, 0) / historicalVols.length
-        : 0;
-      const volR = avgVol > 0 ? b0.v / avgVol : 0;
-
-      if (avgVol < 500000) continue;   // avg daily volume under 500k → too illiquid / micro cap
-      if (volR < 1.0) continue;        // below average volume → skip
-
-      // Only keep stocks where at least one alert threshold is actually crossed
-      const isInteresting =
-        (ch1d  != null && ch1d  >= 10) ||
-        ch7d              >= 20        ||
-        (ch14d != null && ch14d >= 40) ||
-        (ch21d != null && ch21d >= 60) ||
-        volR              >= 2.0;
-
-      if (isInteresting) {
-        scanEntries.push({
-          ticker,
-          data: {
-            ticker,
-            price:        b0.c,
-            change_1d:    ch1d  ?? 0,
-            change_7d:    ch7d,
-            change_14d:   ch14d ?? 0,
-            change_21d:   ch21d ?? 0,
-            volume_ratio: volR,
-            wave_label:   _waveLabel(ch7d, ch21d ?? 0),
-            last_updated: today,
-          },
-        });
+    // ── 2b. Prune alertHistory docs older than 7 days ─────────────────────────
+    // Runs on every daily scan, so old pre-Phase-5 entries are cleaned up on
+    // the next scheduled run. Uses batched deletes to stay within Firestore limits.
+    try {
+      const sevenDaysAgo = new Date(today + 'T00:00:00Z');
+      sevenDaysAgo.setUTCDate(sevenDaysAgo.getUTCDate() - 7);
+      const oldAlertsSnap = await db.collection('chip_radar_alertHistory')
+        .where('timestamp', '<', sevenDaysAgo)
+        .get();
+      if (oldAlertsSnap.docs.length > 0) {
+        for (let i = 0; i < oldAlertsSnap.docs.length; i += 499) {
+          const pruneBatch = db.batch();
+          oldAlertsSnap.docs.slice(i, i + 499).forEach(d => pruneBatch.delete(d.ref));
+          await pruneBatch.commit();
+        }
+        console.log(`Pruned ${oldAlertsSnap.docs.length} old alertHistory docs`);
       }
+    } catch (e) {
+      console.warn('alertHistory pruning failed (non-fatal):', e.message);
+    }
 
-      // Evaluate alert triggers
+    // ── 3. Fetch today's grouped bars (one API call) ───────────────────────────
+    const todayBars = await _fetchGroupedBars(today, apiKey);
+    if (Object.keys(todayBars).length === 0) {
+      console.error("No bars returned for today — aborting");
+      return;
+    }
+    console.log(`Fetched ${Object.keys(todayBars).length} bars for ${today}`);
+
+    // ── 4. Append today's bars into state, trim to 260 days ───────────────────
+    for (const [ticker, bar] of Object.entries(todayBars)) {
+      if (!state.tickers[ticker]) state.tickers[ticker] = { bars: [] };
+      const tickerBars = state.tickers[ticker].bars;
+      if (tickerBars.length > 0 && tickerBars[tickerBars.length - 1].d === today) {
+        // Overwrite if re-running the same day
+        tickerBars[tickerBars.length - 1] = { d: today, o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v };
+      } else {
+        tickerBars.push({ d: today, o: bar.o, h: bar.h, l: bar.l, c: bar.c, v: bar.v });
+        if (tickerBars.length > 260) state.tickers[ticker].bars = tickerBars.slice(-260);
+      }
+    }
+
+    // ── 5. Remove tickers not seen in last 10 days (delisted / dead) ──────────
+    for (const ticker of Object.keys(state.tickers)) {
+      if (!todayBars[ticker]) {
+        const bars = state.tickers[ticker].bars;
+        const lastBar = bars[bars.length - 1];
+        if (daysBetween(lastBar.d, today) > 10) delete state.tickers[ticker];
+      }
+    }
+
+    // ── 6. Pass 1 — hard-filter loop: collect allMetrics ─────────────────────
+    // Same structural filters as before; no isInteresting check here.
+    // Ranking (Pass 2) and scoring (Pass 3) happen after the full universe
+    // has been assembled so each stock is ranked relative to all others.
+    const allMetrics = [];
+
+    for (const [ticker, { bars }] of Object.entries(state.tickers)) {
+      if (!todayBars[ticker]) continue;
+      if (bars.length < 2) continue;
+
+      const todayClose = bars[bars.length - 1].c;
+      if (todayClose < 15) continue;
+
+      const vol = computeVolumeMetrics(bars);
+      if (!vol) continue;
+      if (vol.medDollarVol20 < 20_000_000) continue;
+      if (vol.todayDollarVol  < 10_000_000) continue;
+      if (vol.volRatio20 < 1.0) continue;
+
+      const s = computeStructureMetrics(bars);
+      if (!s) continue;
+
+      if (s.ch7d == null || s.ch21d == null) continue;
+      if (s.ch7d <= 0 || s.ch21d <= 0) continue;
+      if (s.ch14d != null && s.ch14d <= 0) continue;
+
+      if (s.sma20 && todayClose < s.sma20) continue;
+      if (s.sma50 && todayClose < s.sma50) continue;
+      if (bars.length >= 60 && s.sma20 && s.sma50 && s.sma20 < s.sma50) continue;
+      if (s.sma20Slope != null && s.sma20Slope <= 0) continue;
+
+      if (s.rangePosition252 != null && s.rangePosition252 < 0.60) continue;
+      if (s.distFromHigh252  != null && s.distFromHigh252  < 0.75) continue;
+
+      allMetrics.push({ ticker, s, vol, barsLength: bars.length, todayClose });
+    }
+    console.log(`Pass 1 survivors: ${allMetrics.length} tickers`);
+
+    // ── 7. Pass 2 — assign relative-strength percentile ranks ─────────────────
+    assignAllRanks(allMetrics);
+
+    // ── 8. Pass 3 — score, wave-classify, cap output at 50 ────────────────────
+    const MIN_LIST_SCORE  = 40;  // minimum to appear in Firestore list
+    const MIN_ALERT_SCORE = 60;  // minimum to fire a push notification
+
+    // Compute score and wave for every survivor, drop low-scorers
+    const scoredMetrics = [];
+    for (const m of allMetrics) {
+      m.wave  = classifyWave(m.s, m.vol);
+      m.score = computeSurgeScore(m.s, m.vol, m);
+      if (m.score < MIN_LIST_SCORE) continue;
+      scoredMetrics.push(m);
+    }
+
+    // Split by wave, sort by score desc within each group, cap each bucket
+    const earlyBreakouts = scoredMetrics.filter(m => m.wave === "early")
+      .sort((a, b) => b.score - a.score).slice(0, 15);
+    const accumulating = scoredMetrics.filter(m => m.wave === "accumulating")
+      .sort((a, b) => b.score - a.score).slice(0, 10);
+    const running = scoredMetrics.filter(m => m.wave === "running")
+      .sort((a, b) => b.score - a.score).slice(0, 15);
+    const watching = scoredMetrics.filter(m => m.wave === "watching")
+      .sort((a, b) => b.score - a.score).slice(0, 5);
+    const extended = scoredMetrics.filter(m => m.wave === "extended")
+      .sort((a, b) => b.score - a.score).slice(0, 5);
+
+    // Final ordered list: max 50 stocks total
+    const finalList = [...earlyBreakouts, ...accumulating, ...running, ...watching, ...extended];
+    console.log(`Pass 3 — ${scoredMetrics.length} scored, ${finalList.length} in finalList (cap 50, score ≥ ${MIN_LIST_SCORE})`);
+
+    // ── 9. Build scan entries and collect alert triggers ───────────────────────
+    const scanEntries = [];
+    const newAlerts   = [];
+
+    finalList.forEach((m, idx) => {
+      const { ticker, s, vol, todayClose, wave, score } = m;
+
+      scanEntries.push({
+        ticker,
+        data: {
+          ticker,
+          price:             todayClose,
+          change_1d:         s.ch1d    ?? 0,
+          change_7d:         s.ch7d    ?? 0,
+          change_14d:        s.ch14d   ?? 0,
+          change_21d:        s.ch21d   ?? 0,
+          change_63d:        s.ch63d   ?? 0,
+          change_126d:       s.ch126d  ?? null,
+          last_updated:      today,
+          volume_ratio:      vol.volRatio20,
+          volume_ratio_50:   vol.volRatio50  ?? null,
+          median_dollar_vol: vol.medDollarVol20,
+          today_dollar_vol:  vol.todayDollarVol,
+          sma20:             s.sma20   ?? null,
+          sma50:             s.sma50   ?? null,
+          new_high_20:       s.newHigh20,
+          new_high_55:       s.newHigh55,
+          new_high_252:      s.newHigh252,
+          range_position:    s.rangePosition252 ?? null,
+          dist_from_high:    s.distFromHigh252  ?? null,
+          close_location:    s.closeLocation,
+          wave_label:        wave,
+          score,
+          score_rank:        idx + 1,
+          rs21_rank:         m.rs21Rank  ?? null,
+          rs63_rank:         m.rs63Rank  ?? null,
+          rs126_rank:        m.rs126Rank ?? null,
+        },
+      });
+
+      // Only collect alert triggers for high-conviction setups
+      if (score < MIN_ALERT_SCORE) return;
+
       const triggers = [];
-      if (ch1d  != null && ch1d  >= 10) triggers.push({ label: "📈 Daily spike",         val: ch1d,  win: "1d"   });
-      if (ch7d              >= 20)       triggers.push({ label: "🔥 Weekly momentum",     val: ch7d,  win: "7d"   });
-      if (ch7d              >= 35)       triggers.push({ label: "🚨 Strong weekly surge", val: ch7d,  win: "7d_s" });
-      if (ch14d != null && ch14d >= 40)  triggers.push({ label: "🚨 2-week surge",        val: ch14d, win: "14d"  });
-      if (ch21d != null && ch21d >= 60)  triggers.push({ label: "🆘 Major 3-week move",   val: ch21d, win: "21d"  });
-      if (volR              >= 2)        triggers.push({ label: "📊 Unusual volume",      val: volR,  win: "vol"  });
+      if (s.ch1d != null && s.ch1d >= 10 && s.newHigh20)
+        triggers.push({ label: "📈 Daily spike",         val: s.ch1d,         win: "1d"   });
+      if (s.ch7d >= 20 && vol.volRatio20 >= 1.5)
+        triggers.push({ label: "🔥 Weekly momentum",     val: s.ch7d,         win: "7d"   });
+      if (s.ch7d >= 35 && s.newHigh55)
+        triggers.push({ label: "🚨 Strong weekly surge", val: s.ch7d,         win: "7d_s" });
+      if (s.ch14d != null && s.ch14d >= 40 && s.sma50 && todayClose > s.sma50)
+        triggers.push({ label: "🚨 2-week surge",        val: s.ch14d,        win: "14d"  });
+      if (s.ch21d != null && s.ch21d >= 60 && s.newHigh55)
+        triggers.push({ label: "🆘 Major 3-week move",   val: s.ch21d,        win: "21d"  });
+      if (vol.volRatio20 >= 2.5 && s.newHigh20)
+        triggers.push({ label: "📊 Unusual volume",      val: vol.volRatio20, win: "vol"  });
 
       for (const t of triggers) {
         const alertKey = `${ticker}_${t.win}_${today}`;
         const sign = t.val >= 0 ? "+" : "";
         const body = t.win === "vol"
-          ? `${ticker} Volumen ${t.val.toFixed(1)}× über dem Durchschnitt`
+          ? `${ticker} Volumen ${t.val.toFixed(1)}× über dem 20-Tage-Median`
           : `${ticker} ${sign}${t.val.toFixed(1)}% (${t.win})`;
 
         newAlerts.push({
           key: alertKey,
-          alertData: { ticker, label: t.label, window: t.win, value: t.val, price: b0.c, timestamp: FieldValue.serverTimestamp() },
+          alertData: { ticker, label: t.label, window: t.win, value: t.val, price: todayClose, timestamp: FieldValue.serverTimestamp() },
           fcmTitle: `${t.label}: ${ticker}`,
-          fcmBody: body,
+          fcmBody:  body,
           ticker,
         });
       }
-    }
+    });
 
-    // ── 5. Write scan results in batches of 499 ───────────────────────────────
-    const freshTickers = new Set(scanEntries.map(e => e.ticker));
+    // ── 10. Write scan results — delete stale, write finalList ────────────────
+    const freshTickers = new Set(finalList.map(m => m.ticker));
 
-    // Delete any docs from previous runs that no longer meet thresholds
     const existingSnap = await db.collection("chip_radar_scanResults").get();
     const stale = existingSnap.docs.filter(d => !freshTickers.has(d.id));
     for (let i = 0; i < stale.length; i += 499) {
@@ -891,7 +1115,6 @@ exports.dailyChipScan = onSchedule(
     }
     console.log(`${stale.length} stale results deleted`);
 
-    // Write fresh results
     for (let i = 0; i < scanEntries.length; i += 499) {
       const chunk = scanEntries.slice(i, i + 499);
       const batch = db.batch();
@@ -902,16 +1125,16 @@ exports.dailyChipScan = onSchedule(
     }
     console.log(`${scanEntries.length} scan results written`);
 
-    // ── 6. Deduplicate alerts and write to Firestore ──────────────────────────
+    // ── 11. Deduplicate alerts and write to Firestore ─────────────────────────
     let alertsFired = 0;
     for (const alert of newAlerts) {
       const ref = db.collection("chip_radar_alertHistory").doc(alert.key);
-      if ((await ref.get()).exists) continue; // already fired today
+      if ((await ref.get()).exists) continue;
       await ref.set(alert.alertData);
       alertsFired++;
     }
 
-    // ── 7. Send ONE summary push notification ─────────────────────────────────
+    // ── 12. Send ONE summary push notification ────────────────────────────────
     if (alertsFired > 0 && tokens.length > 0) {
       const uniqueTickers = [...new Set(newAlerts.map(a => a.ticker))];
       const tickerPreview = uniqueTickers.slice(0, 3).join(", ");
@@ -920,13 +1143,17 @@ exports.dailyChipScan = onSchedule(
         tokens,
         notification: {
           title: `📡 Chip Radar — ${alertsFired} neue Signale`,
-          body: `${tickerPreview}${moreCount} haben Schwellenwerte überschritten`,
+          body:  `${tickerPreview}${moreCount} haben Schwellenwerte überschritten`,
         },
-        data: { route: "/chip-radar" },
+        data:    { route: "/chip-radar" },
         android: { priority: "high" },
-        apns: { payload: { aps: { sound: "default" } } },
+        apns:    { payload: { aps: { sound: "default" } } },
       }).catch(e => console.error("FCM summary error:", e.message));
     }
+
+    // ── 10. Persist updated state to Cloud Storage ────────────────────────────
+    state.lastUpdatedDate = today;
+    await saveState(state);
 
     console.log(`dailyChipScan complete — ${scanEntries.length} tickers, ${alertsFired} alerts fired.`);
   }
