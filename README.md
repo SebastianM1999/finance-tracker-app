@@ -2,7 +2,7 @@
 
 A mobile-first personal finance app built with Flutter & Firebase.
 
-🌐 **Web:** https://fintrack-a459c.web.app
+🌐 **Web:** https://fintrackapp.de
 
 ## Features
 
