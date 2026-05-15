@@ -11,6 +11,7 @@ import '../../features/analyse/screens/risiko_detail_screen.dart';
 import '../../features/analyse/screens/top_flop_detail_screen.dart';
 import '../../features/auth/providers/auth_providers.dart';
 import '../../features/auth/screens/login_screen.dart';
+import '../../features/privacy/privacy_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/investments/screens/investments_screen.dart';
 import '../../features/giro/screens/giro_screen.dart';
@@ -23,6 +24,7 @@ import '../../shared/widgets/app_bottom_nav.dart';
 // Named routes
 class AppRoutes {
   static const login = '/login';
+  static const privacy = '/privacy';
   static const home = '/home';
   static const investments = '/investments';
   static const accounts = '/accounts';
@@ -47,12 +49,18 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final isLoggedIn = ref.read(authStateProvider).valueOrNull != null;
       final isOnLogin = state.matchedLocation == AppRoutes.login;
+      final isPublic = state.matchedLocation == AppRoutes.privacy;
 
+      if (isPublic) return null;
       if (!isLoggedIn && !isOnLogin) return AppRoutes.login;
       if (isLoggedIn && isOnLogin) return AppRoutes.home;
       return null;
     },
     routes: [
+      GoRoute(
+        path: AppRoutes.privacy,
+        builder: (_, __) => const PrivacyScreen(),
+      ),
       GoRoute(
         path: AppRoutes.login,
         pageBuilder: (context, state) => CustomTransitionPage(
