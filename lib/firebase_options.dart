@@ -54,7 +54,7 @@ class DefaultFirebaseOptions {
     appId: '1:747087290787:web:1423283c1ed81660f7fa16',
     messagingSenderId: '747087290787',
     projectId: 'fintrack-a459c',
-    authDomain: 'fintrack-a459c.firebaseapp.com',
+    authDomain: 'fintrackapp.de',
     storageBucket: 'fintrack-a459c.firebasestorage.app',
   );
 
